@@ -1,10 +1,11 @@
 {
-  "name": "yuktai",
+  "name": "yuktai-js",
   "version": "1.0.0",
   "description": "YuktAI — AI Engine. Do more with less.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "files": ["dist"],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",
     "test": "node test.js"
