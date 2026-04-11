@@ -2,135 +2,81 @@
 
 import Tesseract from "tesseract.js";
 
-/**
- * 🌍 Full Language Config
- */
-const ALL_LANGS = [
-  { value: "ara", group: "other" },
-  { value: "asm", group: "indic" },
-  { value: "ben", group: "indic" },
-  { value: "bod", group: "indic" },
-  { value: "chi_sim", group: "cjk" },
-  { value: "chi_tra", group: "cjk" },
-  { value: "deu", group: "latin" },
-  { value: "eng", group: "latin" },
-  { value: "fra", group: "latin" },
-  { value: "guj", group: "indic" },
-  { value: "hin", group: "indic" },
-  { value: "ita", group: "latin" },
-  { value: "jpn", group: "cjk" },
-  { value: "kan", group: "indic" },
-  { value: "kor", group: "cjk" },
-  { value: "mal", group: "indic" },
-  { value: "mar", group: "indic" },
-  { value: "nep", group: "indic" },
-  { value: "nld", group: "latin" },
-  { value: "ori", group: "indic" },
-  { value: "pan", group: "indic" },
-  { value: "por", group: "latin" },
-  { value: "rus", group: "other" },
-  { value: "san", group: "indic" },
-  { value: "snd", group: "indic" },
-  { value: "spa", group: "latin" },
-  { value: "swe", group: "latin" },
-  { value: "tam", group: "indic" },
-  { value: "tel", group: "indic" },
-  { value: "tha", group: "other" },
-  { value: "tur", group: "latin" },
-  { value: "urd", group: "other" },
-  { value: "vie", group: "other" },
-];
+const LANG_GROUPS: Record<string, string[]> = {
+  indic: ["hin", "tel", "tam", "kan", "mal", "ben", "guj", "pan", "mar"],
+  latin: ["eng", "fra", "deu", "spa", "por", "ita", "nld", "swe", "tur"],
+  cjk:   ["chi_sim", "chi_tra", "jpn", "kor"],
+  other: ["ara", "rus", "tha", "urd", "vie"],
+};
 
-const getLangsByGroup = (group: string) =>
-  ALL_LANGS.filter((l) => l.group === group).map((l) => l.value);
+// Simple heuristic — checks unicode ranges instead of broken OSD
+function detectCandidates(buffer: ArrayBuffer): string[] {
+  const bytes = new Uint8Array(buffer.slice(0, 2000));
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 
-/**
- * 🚀 YuktAI OCR Plugin (FIXED)
- */
+  if (/[\u0C00-\u0C7F]/.test(text)) return LANG_GROUPS.indic; // Telugu
+  if (/[\u0900-\u097F]/.test(text)) return LANG_GROUPS.indic; // Devanagari
+  if (/[\u0B80-\u0BFF]/.test(text)) return LANG_GROUPS.indic; // Tamil
+  if (/[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)) return LANG_GROUPS.cjk;
+  if (/[\u0600-\u06FF]/.test(text)) return ["ara", "urd"];
+  if (/[\u0400-\u04FF]/.test(text)) return ["rus"];
+
+  // Default: try english + a few indic since you're in India
+  return ["eng", "hin", "tel"];
+}
+
 export const ocrSmartPlugin = {
   name: "image.ocr.smart",
 
-  async execute(input: { file: any }) {
+  async execute(input: { file: any; name?: string; type?: string }) {
     try {
       if (!input?.file) return "❌ No file provided";
 
-      // ✅ FIX 1: Convert ArrayBuffer → Blob
       const blob =
         input.file instanceof Blob
           ? input.file
-          : new Blob([input.file]);
+          : new Blob([input.file], { type: input.type ?? "image/png" });
 
-      // ✅ FIX 2: Correct version paths (v6)
-      const worker = await Tesseract.createWorker({
-        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      const candidates = detectCandidates(await blob.arrayBuffer());
 
-        corePath:
-          "https://cdn.jsdelivr.net/npm/tesseract.js-core@v6/tesseract-core.wasm.js",
+      // ✅ v6 API: pass languages directly to createWorker — NO loadLanguage/initialize calls
+      const workers = await Promise.all(
+        candidates.slice(0, 4).map((lang) =>
+          Tesseract.createWorker([lang], 1, {
+            // ✅ Remove corePath/workerPath — v6 resolves these automatically
+            langPath: "https://tessdata.projectnaptha.com/4.0.0",
+            cacheMethod: "readwrite",
+          })
+        )
+      );
 
-        workerPath:
-          "https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/worker.min.js",
-
-        cacheMethod: "readwrite",
-      });
-
-      // 🧠 STEP 1: SCRIPT DETECTION
-      await worker.loadLanguage("osd");
-      await worker.initialize("osd");
-
-      const osd = await worker.recognize(blob);
-      const script = (osd.data as any)?.script || "";
-
-      let candidates: string[] = [];
-
-      if (
-        script.includes("Telugu") ||
-        script.includes("Devanagari") ||
-        script.includes("Tamil") ||
-        script.includes("Kannada") ||
-        script.includes("Malayalam")
-      ) {
-        candidates = getLangsByGroup("indic");
-      } else if (script.includes("Latin")) {
-        candidates = getLangsByGroup("latin");
-      } else if (script.includes("Chinese") || script.includes("Hangul")) {
-        candidates = getLangsByGroup("cjk");
-      } else {
-        candidates = ["eng"];
-      }
-
-      let bestText = "";
-      let bestConfidence = 0;
-      let bestLang = "";
-
-      // ⚡ STEP 2: OCR LOOP
-      for (const lang of candidates.slice(0, 5)) {
-        try {
-          await worker.loadLanguage(lang);
-          await worker.initialize(lang);
-
-          const res = await worker.recognize(blob);
-
-          const text = res.data.text?.trim();
-          const confidence = res.data.confidence || 0;
-
-          if (text && confidence > bestConfidence) {
-            bestText = text;
-            bestConfidence = confidence;
-            bestLang = lang;
+      const results = await Promise.all(
+        workers.map(async (worker, i) => {
+          try {
+            const { data } = await worker.recognize(blob);
+            return {
+              lang: candidates[i],
+              text: data.text?.trim() ?? "",
+              confidence: data.confidence ?? 0,
+            };
+          } catch {
+            return { lang: candidates[i], text: "", confidence: 0 };
+          } finally {
+            await worker.terminate();
           }
-        } catch {
-          continue;
-        }
-      }
+        })
+      );
 
-      await worker.terminate();
+      const best = results.reduce((a, b) =>
+        b.confidence > a.confidence ? b : a
+      );
 
-      if (!bestText) return "⚠️ No text detected";
+      if (!best.text) return "⚠️ No text detected";
 
       return {
-        language: bestLang,
-        confidence: Math.round(bestConfidence),
-        text: bestText,
+        language: best.lang,
+        confidence: Math.round(best.confidence),
+        text: best.text,
       };
     } catch (err) {
       console.error(err);

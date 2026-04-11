@@ -72,93 +72,63 @@ var voicePlugin = {
 
 // src/plugins/ocr.ts
 var import_tesseract = __toESM(require("tesseract.js"), 1);
-var ALL_LANGS = [
-  { value: "ara", group: "other" },
-  { value: "asm", group: "indic" },
-  { value: "ben", group: "indic" },
-  { value: "bod", group: "indic" },
-  { value: "chi_sim", group: "cjk" },
-  { value: "chi_tra", group: "cjk" },
-  { value: "deu", group: "latin" },
-  { value: "eng", group: "latin" },
-  { value: "fra", group: "latin" },
-  { value: "guj", group: "indic" },
-  { value: "hin", group: "indic" },
-  { value: "ita", group: "latin" },
-  { value: "jpn", group: "cjk" },
-  { value: "kan", group: "indic" },
-  { value: "kor", group: "cjk" },
-  { value: "mal", group: "indic" },
-  { value: "mar", group: "indic" },
-  { value: "nep", group: "indic" },
-  { value: "nld", group: "latin" },
-  { value: "ori", group: "indic" },
-  { value: "pan", group: "indic" },
-  { value: "por", group: "latin" },
-  { value: "rus", group: "other" },
-  { value: "san", group: "indic" },
-  { value: "snd", group: "indic" },
-  { value: "spa", group: "latin" },
-  { value: "swe", group: "latin" },
-  { value: "tam", group: "indic" },
-  { value: "tel", group: "indic" },
-  { value: "tha", group: "other" },
-  { value: "tur", group: "latin" },
-  { value: "urd", group: "other" },
-  { value: "vie", group: "other" }
-];
-var getLangsByGroup = (group) => ALL_LANGS.filter((l) => l.group === group).map((l) => l.value);
+var LANG_GROUPS = {
+  indic: ["hin", "tel", "tam", "kan", "mal", "ben", "guj", "pan", "mar"],
+  latin: ["eng", "fra", "deu", "spa", "por", "ita", "nld", "swe", "tur"],
+  cjk: ["chi_sim", "chi_tra", "jpn", "kor"],
+  other: ["ara", "rus", "tha", "urd", "vie"]
+};
+function detectCandidates(buffer) {
+  const bytes = new Uint8Array(buffer.slice(0, 2e3));
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  if (/[\u0C00-\u0C7F]/.test(text)) return LANG_GROUPS.indic;
+  if (/[\u0900-\u097F]/.test(text)) return LANG_GROUPS.indic;
+  if (/[\u0B80-\u0BFF]/.test(text)) return LANG_GROUPS.indic;
+  if (/[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)) return LANG_GROUPS.cjk;
+  if (/[\u0600-\u06FF]/.test(text)) return ["ara", "urd"];
+  if (/[\u0400-\u04FF]/.test(text)) return ["rus"];
+  return ["eng", "hin", "tel"];
+}
 var ocrSmartPlugin = {
   name: "image.ocr.smart",
   async execute(input) {
     try {
       if (!input?.file) return "\u274C No file provided";
-      const blob = input.file instanceof Blob ? input.file : new Blob([input.file]);
-      const worker = await import_tesseract.default.createWorker({
-        langPath: "https://tessdata.projectnaptha.com/4.0.0",
-        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@v6/tesseract-core.wasm.js",
-        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/worker.min.js",
-        cacheMethod: "readwrite"
-      });
-      await worker.loadLanguage("osd");
-      await worker.initialize("osd");
-      const osd = await worker.recognize(blob);
-      const script = osd.data?.script || "";
-      let candidates = [];
-      if (script.includes("Telugu") || script.includes("Devanagari") || script.includes("Tamil") || script.includes("Kannada") || script.includes("Malayalam")) {
-        candidates = getLangsByGroup("indic");
-      } else if (script.includes("Latin")) {
-        candidates = getLangsByGroup("latin");
-      } else if (script.includes("Chinese") || script.includes("Hangul")) {
-        candidates = getLangsByGroup("cjk");
-      } else {
-        candidates = ["eng"];
-      }
-      let bestText = "";
-      let bestConfidence = 0;
-      let bestLang = "";
-      for (const lang of candidates.slice(0, 5)) {
-        try {
-          await worker.loadLanguage(lang);
-          await worker.initialize(lang);
-          const res = await worker.recognize(blob);
-          const text = res.data.text?.trim();
-          const confidence = res.data.confidence || 0;
-          if (text && confidence > bestConfidence) {
-            bestText = text;
-            bestConfidence = confidence;
-            bestLang = lang;
+      const blob = input.file instanceof Blob ? input.file : new Blob([input.file], { type: input.type ?? "image/png" });
+      const candidates = detectCandidates(await blob.arrayBuffer());
+      const workers = await Promise.all(
+        candidates.slice(0, 4).map(
+          (lang) => import_tesseract.default.createWorker([lang], 1, {
+            // ✅ Remove corePath/workerPath — v6 resolves these automatically
+            langPath: "https://tessdata.projectnaptha.com/4.0.0",
+            cacheMethod: "readwrite"
+          })
+        )
+      );
+      const results = await Promise.all(
+        workers.map(async (worker, i) => {
+          try {
+            const { data } = await worker.recognize(blob);
+            return {
+              lang: candidates[i],
+              text: data.text?.trim() ?? "",
+              confidence: data.confidence ?? 0
+            };
+          } catch {
+            return { lang: candidates[i], text: "", confidence: 0 };
+          } finally {
+            await worker.terminate();
           }
-        } catch {
-          continue;
-        }
-      }
-      await worker.terminate();
-      if (!bestText) return "\u26A0\uFE0F No text detected";
+        })
+      );
+      const best = results.reduce(
+        (a, b) => b.confidence > a.confidence ? b : a
+      );
+      if (!best.text) return "\u26A0\uFE0F No text detected";
       return {
-        language: bestLang,
-        confidence: Math.round(bestConfidence),
-        text: bestText
+        language: best.lang,
+        confidence: Math.round(best.confidence),
+        text: best.text
       };
     } catch (err) {
       console.error(err);
