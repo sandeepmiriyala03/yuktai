@@ -3,52 +3,49 @@
 import Tesseract from "tesseract.js";
 
 /**
- * ✅ Full Language Config (your structure)
+ * 🌍 Full Language Config
  */
 const ALL_LANGS = [
-  { value: "ara", label: "Arabic", group: "other" },
-  { value: "asm", label: "Assamese", group: "indic" },
-  { value: "ben", label: "Bengali", group: "indic" },
-  { value: "bod", label: "Bodo", group: "indic" },
-  { value: "chi_sim", label: "Chinese (Simplified)", group: "cjk" },
-  { value: "chi_tra", label: "Chinese (Traditional)", group: "cjk" },
-  { value: "deu", label: "German", group: "latin" },
-  { value: "eng", label: "English", group: "latin" },
-  { value: "fra", label: "French", group: "latin" },
-  { value: "guj", label: "Gujarati", group: "indic" },
-  { value: "hin", label: "Hindi", group: "indic" },
-  { value: "ita", label: "Italian", group: "latin" },
-  { value: "jpn", label: "Japanese", group: "cjk" },
-  { value: "kan", label: "Kannada", group: "indic" },
-  { value: "kor", label: "Korean", group: "cjk" },
-  { value: "mal", label: "Malayalam", group: "indic" },
-  { value: "mar", label: "Marathi", group: "indic" },
-  { value: "nep", label: "Nepali", group: "indic" },
-  { value: "nld", label: "Dutch", group: "latin" },
-  { value: "ori", label: "Odia", group: "indic" },
-  { value: "pan", label: "Punjabi", group: "indic" },
-  { value: "por", label: "Portuguese", group: "latin" },
-  { value: "rus", label: "Russian", group: "other" },
-  { value: "san", label: "Sanskrit", group: "indic" },
-  { value: "snd", label: "Sindhi", group: "indic" },
-  { value: "spa", label: "Spanish", group: "latin" },
-  { value: "swe", label: "Swedish", group: "latin" },
-  { value: "tam", label: "Tamil", group: "indic" },
-  { value: "tel", label: "Telugu", group: "indic" },
-  { value: "tha", label: "Thai", group: "other" },
-  { value: "tur", label: "Turkish", group: "latin" },
-  { value: "urd", label: "Urdu", group: "other" },
-  { value: "vie", label: "Vietnamese", group: "other" },
+  { value: "ara", group: "other" },
+  { value: "asm", group: "indic" },
+  { value: "ben", group: "indic" },
+  { value: "bod", group: "indic" },
+  { value: "chi_sim", group: "cjk" },
+  { value: "chi_tra", group: "cjk" },
+  { value: "deu", group: "latin" },
+  { value: "eng", group: "latin" },
+  { value: "fra", group: "latin" },
+  { value: "guj", group: "indic" },
+  { value: "hin", group: "indic" },
+  { value: "ita", group: "latin" },
+  { value: "jpn", group: "cjk" },
+  { value: "kan", group: "indic" },
+  { value: "kor", group: "cjk" },
+  { value: "mal", group: "indic" },
+  { value: "mar", group: "indic" },
+  { value: "nep", group: "indic" },
+  { value: "nld", group: "latin" },
+  { value: "ori", group: "indic" },
+  { value: "pan", group: "indic" },
+  { value: "por", group: "latin" },
+  { value: "rus", group: "other" },
+  { value: "san", group: "indic" },
+  { value: "snd", group: "indic" },
+  { value: "spa", group: "latin" },
+  { value: "swe", group: "latin" },
+  { value: "tam", group: "indic" },
+  { value: "tel", group: "indic" },
+  { value: "tha", group: "other" },
+  { value: "tur", group: "latin" },
+  { value: "urd", group: "other" },
+  { value: "vie", group: "other" },
 ];
 
-/**
- * 🔹 Group Helpers
- */
 const getLangsByGroup = (group: string) =>
   ALL_LANGS.filter((l) => l.group === group).map((l) => l.value);
 
 /**
- * ✅ YuktAI Plugin
+ * 🚀 YuktAI OCR Plugin (CDN VERSION)
  */
 export const ocrSmartPlugin = {
   name: "image.ocr.smart",
@@ -57,13 +54,31 @@ export const ocrSmartPlugin = {
     try {
       if (!input?.file) return "❌ No file provided";
 
-      // 🔹 STEP 1: Detect script
-      const osd = await Tesseract.recognize(input.file, "osd");
+      // 🔥 WORKER (CDN BASED)
+      const worker = await Tesseract.createWorker({
+        logger: (m) => console.log(m),
+
+        // ✅ LOAD FROM URL (NO LOCAL FILES)
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+
+        corePath:
+          "https://cdn.jsdelivr.net/npm/tesseract.js-core@v4.0.4/tesseract-core.wasm.js",
+
+        workerPath:
+          "https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/worker.min.js",
+
+        cacheMethod: "readwrite", // ⚡ cache in browser
+      });
+
+      // 🧠 STEP 1: SCRIPT DETECTION
+      await worker.loadLanguage("osd");
+      await worker.initialize("osd");
+
+      const osd = await worker.recognize(input.file);
       const script = (osd.data as any)?.script || "";
 
       let candidates: string[] = [];
 
-      // 🔥 Smart grouping (your logic improved)
       if (
         script.includes("Telugu") ||
         script.includes("Devanagari") ||
@@ -77,17 +92,20 @@ export const ocrSmartPlugin = {
       } else if (script.includes("Chinese") || script.includes("Hangul")) {
         candidates = getLangsByGroup("cjk");
       } else {
-        candidates = ALL_LANGS.map((l) => l.value);
+        candidates = ["eng"]; // 🔥 fallback
       }
 
       let bestText = "";
       let bestConfidence = 0;
       let bestLang = "";
 
-      // 🔹 STEP 2: OCR loop
-      for (const lang of candidates) {
+      // ⚡ STEP 2: OCR LOOP (LIMITED)
+      for (const lang of candidates.slice(0, 5)) {
         try {
-          const res = await Tesseract.recognize(input.file, lang);
+          await worker.loadLanguage(lang);
+          await worker.initialize(lang);
+
+          const res = await worker.recognize(input.file);
 
           const text = res.data.text?.trim();
           const confidence = res.data.confidence || 0;
@@ -102,15 +120,17 @@ export const ocrSmartPlugin = {
         }
       }
 
+      await worker.terminate(); // 🔥 cleanup
+
       if (!bestText) return "⚠️ No text detected";
 
-      // 🔥 Final Output
       return {
         language: bestLang,
         confidence: Math.round(bestConfidence),
         text: bestText,
       };
-    } catch {
+    } catch (err) {
+      console.error(err);
       return "❌ OCR failed";
     }
   },
