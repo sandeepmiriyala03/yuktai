@@ -45,26 +45,30 @@ const getLangsByGroup = (group: string) =>
   ALL_LANGS.filter((l) => l.group === group).map((l) => l.value);
 
 /**
- * 🚀 YuktAI OCR Plugin (CDN VERSION)
+ * 🚀 YuktAI OCR Plugin (FIXED)
  */
 export const ocrSmartPlugin = {
   name: "image.ocr.smart",
 
-  async execute(input: { file: File }) {
+  async execute(input: { file: any }) {
     try {
       if (!input?.file) return "❌ No file provided";
 
-      // 🔥 WORKER (CDN BASED)
-      const worker = await Tesseract.createWorker({
-        // ✅ FIX: removed logger (causing DataCloneError)
+      // ✅ FIX 1: Convert ArrayBuffer → Blob
+      const blob =
+        input.file instanceof Blob
+          ? input.file
+          : new Blob([input.file]);
 
+      // ✅ FIX 2: Correct version paths (v6)
+      const worker = await Tesseract.createWorker({
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
 
         corePath:
-          "https://cdn.jsdelivr.net/npm/tesseract.js-core@v4.0.4/tesseract-core.wasm.js",
+          "https://cdn.jsdelivr.net/npm/tesseract.js-core@v6/tesseract-core.wasm.js",
 
         workerPath:
-          "https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/worker.min.js",
+          "https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/worker.min.js",
 
         cacheMethod: "readwrite",
       });
@@ -73,7 +77,7 @@ export const ocrSmartPlugin = {
       await worker.loadLanguage("osd");
       await worker.initialize("osd");
 
-      const osd = await worker.recognize(input.file);
+      const osd = await worker.recognize(blob);
       const script = (osd.data as any)?.script || "";
 
       let candidates: string[] = [];
@@ -104,7 +108,7 @@ export const ocrSmartPlugin = {
           await worker.loadLanguage(lang);
           await worker.initialize(lang);
 
-          const res = await worker.recognize(input.file);
+          const res = await worker.recognize(blob);
 
           const text = res.data.text?.trim();
           const confidence = res.data.confidence || 0;
