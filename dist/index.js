@@ -77,16 +77,16 @@ var ocrSmartPlugin = {
   async execute(input) {
     try {
       if (!input?.file) return "\u274C No file provided";
+      const blob = input.file instanceof Blob ? input.file : new Blob([input.file]);
       const worker = await Tesseract.createWorker({
-        // ✅ FIX: removed logger (causing DataCloneError)
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
-        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@v4.0.4/tesseract-core.wasm.js",
-        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/worker.min.js",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@v6/tesseract-core.wasm.js",
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/worker.min.js",
         cacheMethod: "readwrite"
       });
       await worker.loadLanguage("osd");
       await worker.initialize("osd");
-      const osd = await worker.recognize(input.file);
+      const osd = await worker.recognize(blob);
       const script = osd.data?.script || "";
       let candidates = [];
       if (script.includes("Telugu") || script.includes("Devanagari") || script.includes("Tamil") || script.includes("Kannada") || script.includes("Malayalam")) {
@@ -105,7 +105,7 @@ var ocrSmartPlugin = {
         try {
           await worker.loadLanguage(lang);
           await worker.initialize(lang);
-          const res = await worker.recognize(input.file);
+          const res = await worker.recognize(blob);
           const text = res.data.text?.trim();
           const confidence = res.data.confidence || 0;
           if (text && confidence > bestConfidence) {
