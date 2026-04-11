@@ -36,6 +36,8 @@ var voicePlugin = {
 
 // src/plugins/ocr.ts
 import Tesseract from "tesseract.js";
+var worker = null;
+var currentLang = null;
 function detectLang(buffer) {
   const text = new TextDecoder("utf-8", { fatal: false }).decode(
     new Uint8Array(buffer.slice(0, 2e3))
@@ -49,32 +51,43 @@ function detectLang(buffer) {
   if (/[\u0400-\u04FF]/.test(text)) return "rus";
   return "eng";
 }
+async function getWorker(lang) {
+  if (worker && currentLang === lang) return worker;
+  if (worker) {
+    await worker.terminate();
+    worker = null;
+  }
+  worker = await Tesseract.createWorker({
+    langPath: "/tessdata",
+    // 🔥 BEST (self-host)
+    // OR use:
+    // langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/",
+    logger: () => {
+    }
+  });
+  await worker.loadLanguage(lang);
+  await worker.initialize(lang);
+  currentLang = lang;
+  return worker;
+}
 var ocrSmartPlugin = {
   name: "image.ocr.smart",
   async execute(input) {
     try {
       if (!input?.file) return "\u274C No file provided";
-      const blob = input.file instanceof Blob ? input.file : new Blob([input.file], { type: input.type ?? "image/png" });
-      const lang = detectLang(await blob.arrayBuffer());
-      const worker = await Tesseract.createWorker(lang, 1, {
-        langPath: "https://unpkg.com/@tesseract.js-data",
-        cacheMethod: "none",
-        logger: () => {
-        }
-        // suppress console noise
+      const blob = input.file instanceof Blob ? input.file : new Blob([input.file], {
+        type: input.type ?? "image/png"
       });
-      try {
-        const { data } = await worker.recognize(blob);
-        const text = data.text?.trim();
-        if (!text) return "\u26A0\uFE0F No text detected";
-        return {
-          language: lang,
-          confidence: Math.round(data.confidence ?? 0),
-          text
-        };
-      } finally {
-        await worker.terminate();
-      }
+      const lang = input.lang || detectLang(await blob.arrayBuffer()) || "eng";
+      const workerInstance = await getWorker(lang);
+      const { data } = await workerInstance.recognize(blob);
+      const text = data.text?.trim();
+      if (!text) return "\u26A0\uFE0F No text detected";
+      return {
+        language: lang,
+        confidence: Math.round(data.confidence ?? 0),
+        text
+      };
     } catch (err) {
       console.error("[ocrSmartPlugin]", err);
       return "\u274C OCR failed";
