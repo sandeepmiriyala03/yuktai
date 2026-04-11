@@ -5,16 +5,26 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",
     "test": "node test.js"
   },
-  "keywords": ["ai", "javascript", "runtime", "yuktai"],
+  "keywords": [
+    "ai",
+    "javascript",
+    "runtime",
+    "yuktai"
+  ],
   "author": "Sandeep Miriyala",
   "license": "MIT",
   "devDependencies": {
     "tsup": "^8.5.1",
     "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
   }
 }
