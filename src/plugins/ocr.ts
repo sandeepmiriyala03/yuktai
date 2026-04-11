@@ -56,9 +56,8 @@ export const ocrSmartPlugin = {
 
       // 🔥 WORKER (CDN BASED)
       const worker = await Tesseract.createWorker({
-        logger: (m) => console.log(m),
+        // ✅ FIX: removed logger (causing DataCloneError)
 
-        // ✅ LOAD FROM URL (NO LOCAL FILES)
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
 
         corePath:
@@ -67,7 +66,7 @@ export const ocrSmartPlugin = {
         workerPath:
           "https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/worker.min.js",
 
-        cacheMethod: "readwrite", // ⚡ cache in browser
+        cacheMethod: "readwrite",
       });
 
       // 🧠 STEP 1: SCRIPT DETECTION
@@ -92,14 +91,14 @@ export const ocrSmartPlugin = {
       } else if (script.includes("Chinese") || script.includes("Hangul")) {
         candidates = getLangsByGroup("cjk");
       } else {
-        candidates = ["eng"]; // 🔥 fallback
+        candidates = ["eng"];
       }
 
       let bestText = "";
       let bestConfidence = 0;
       let bestLang = "";
 
-      // ⚡ STEP 2: OCR LOOP (LIMITED)
+      // ⚡ STEP 2: OCR LOOP
       for (const lang of candidates.slice(0, 5)) {
         try {
           await worker.loadLanguage(lang);
@@ -120,7 +119,7 @@ export const ocrSmartPlugin = {
         }
       }
 
-      await worker.terminate(); // 🔥 cleanup
+      await worker.terminate();
 
       if (!bestText) return "⚠️ No text detected";
 
