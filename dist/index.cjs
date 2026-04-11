@@ -72,22 +72,18 @@ var voicePlugin = {
 
 // src/plugins/ocr.ts
 var import_tesseract = __toESM(require("tesseract.js"), 1);
-var LANG_GROUPS = {
-  indic: ["hin", "tel", "tam", "kan", "mal", "ben", "guj", "pan", "mar"],
-  latin: ["eng", "fra", "deu", "spa", "por", "ita", "nld", "swe", "tur"],
-  cjk: ["chi_sim", "chi_tra", "jpn", "kor"],
-  other: ["ara", "rus", "tha", "urd", "vie"]
-};
-function detectCandidates(buffer) {
-  const bytes = new Uint8Array(buffer.slice(0, 2e3));
-  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  if (/[\u0C00-\u0C7F]/.test(text)) return LANG_GROUPS.indic;
-  if (/[\u0900-\u097F]/.test(text)) return LANG_GROUPS.indic;
-  if (/[\u0B80-\u0BFF]/.test(text)) return LANG_GROUPS.indic;
-  if (/[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(text)) return LANG_GROUPS.cjk;
-  if (/[\u0600-\u06FF]/.test(text)) return ["ara", "urd"];
-  if (/[\u0400-\u04FF]/.test(text)) return ["rus"];
-  return ["eng", "hin", "tel"];
+function detectLang(buffer) {
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(
+    new Uint8Array(buffer.slice(0, 2e3))
+  );
+  if (/[\u0C00-\u0C7F]/.test(text)) return "tel";
+  if (/[\u0900-\u097F]/.test(text)) return "hin";
+  if (/[\u0B80-\u0BFF]/.test(text)) return "tam";
+  if (/[\u4E00-\u9FFF]/.test(text)) return "chi_sim";
+  if (/[\u3040-\u30FF]/.test(text)) return "jpn";
+  if (/[\u0600-\u06FF]/.test(text)) return "ara";
+  if (/[\u0400-\u04FF]/.test(text)) return "rus";
+  return "eng";
 }
 var ocrSmartPlugin = {
   name: "image.ocr.smart",
@@ -95,41 +91,25 @@ var ocrSmartPlugin = {
     try {
       if (!input?.file) return "\u274C No file provided";
       const blob = input.file instanceof Blob ? input.file : new Blob([input.file], { type: input.type ?? "image/png" });
-      const candidates = detectCandidates(await blob.arrayBuffer());
-      const workers = await Promise.all(
-        candidates.slice(0, 4).map(
-          (lang) => import_tesseract.default.createWorker([lang], 1, {
-            // ✅ Remove corePath/workerPath — v6 resolves these automatically
-            langPath: "https://tessdata.projectnaptha.com/4.0.0",
-            cacheMethod: "readwrite"
-          })
-        )
-      );
-      const results = await Promise.all(
-        workers.map(async (worker, i) => {
-          try {
-            const { data } = await worker.recognize(blob);
-            return {
-              lang: candidates[i],
-              text: data.text?.trim() ?? "",
-              confidence: data.confidence ?? 0
-            };
-          } catch {
-            return { lang: candidates[i], text: "", confidence: 0 };
-          } finally {
-            await worker.terminate();
-          }
-        })
-      );
-      const best = results.reduce(
-        (a, b) => b.confidence > a.confidence ? b : a
-      );
-      if (!best.text) return "\u26A0\uFE0F No text detected";
-      return {
-        language: best.lang,
-        confidence: Math.round(best.confidence),
-        text: best.text
-      };
+      const lang = detectLang(await blob.arrayBuffer());
+      const worker = await import_tesseract.default.createWorker(lang, 1, {
+        langPath: "https://unpkg.com/@tesseract.js-data",
+        cacheMethod: "none",
+        logger: () => {
+        }
+      });
+      try {
+        const { data } = await worker.recognize(blob);
+        const text = data.text?.trim();
+        if (!text) return "\u26A0\uFE0F No text detected";
+        return {
+          language: lang,
+          confidence: Math.round(data.confidence ?? 0),
+          text
+        };
+      } finally {
+        await worker.terminate();
+      }
     } catch (err) {
       console.error(err);
       return "\u274C OCR failed";
