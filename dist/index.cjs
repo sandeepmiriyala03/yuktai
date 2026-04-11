@@ -155,10 +155,19 @@ var ocrSmartPlugin = {
 };
 
 // src/index.ts
-var runtime = new Runtime();
-runtime.register(aiPlugin.name, aiPlugin);
-runtime.register(voicePlugin.name, voicePlugin);
-runtime.register(ocrSmartPlugin.name, ocrSmartPlugin);
+var globalAny = globalThis;
+if (!globalAny.__yuktai_runtime__) {
+  const runtime2 = new Runtime();
+  runtime2.register(aiPlugin.name, aiPlugin);
+  runtime2.register(voicePlugin.name, voicePlugin);
+  runtime2.register(ocrSmartPlugin.name, ocrSmartPlugin);
+  globalAny.__yuktai_runtime__ = runtime2;
+}
+var runtime = globalAny.__yuktai_runtime__;
 var index_default = {
-  run: (task, input) => runtime.run(task, input)
+  run: (task, input) => runtime.run(task, input),
+  // 🔥 Optional debug helper
+  list: () => {
+    return Array.from(runtime.plugins.keys());
+  }
 };
