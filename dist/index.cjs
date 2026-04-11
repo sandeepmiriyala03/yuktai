@@ -114,13 +114,11 @@ var ocrSmartPlugin = {
     try {
       if (!input?.file) return "\u274C No file provided";
       const worker = await import_tesseract.default.createWorker({
-        logger: (m) => console.log(m),
-        // ✅ LOAD FROM URL (NO LOCAL FILES)
+        // ✅ FIX: removed logger (causing DataCloneError)
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
         corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@v4.0.4/tesseract-core.wasm.js",
         workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/worker.min.js",
         cacheMethod: "readwrite"
-        // ⚡ cache in browser
       });
       await worker.loadLanguage("osd");
       await worker.initialize("osd");
