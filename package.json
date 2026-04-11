@@ -1,0 +1,19 @@
+{
+  "name": "yuktai",
+  "version": "1.0.0",
+  "description": "YuktAI — AI Engine. Do more with less.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "test": "node test.js"
+  },
+  "keywords": ["ai", "javascript", "runtime", "yuktai"],
+  "author": "Sandeep Miriyala",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2"
+  }
+}
