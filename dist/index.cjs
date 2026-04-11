@@ -97,6 +97,7 @@ var ocrSmartPlugin = {
         cacheMethod: "none",
         logger: () => {
         }
+        // suppress console noise
       });
       try {
         const { data } = await worker.recognize(blob);
@@ -111,7 +112,7 @@ var ocrSmartPlugin = {
         await worker.terminate();
       }
     } catch (err) {
-      console.error(err);
+      console.error("[ocrSmartPlugin]", err);
       return "\u274C OCR failed";
     }
   }
