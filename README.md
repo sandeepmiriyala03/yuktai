@@ -2,7 +2,7 @@
 
 AI Engine  
 Do more with less
-
+npm install git+https://github.com/sandeepmiriyala03/yuktai.git
 ---
 
 ## 🚀 Overview
