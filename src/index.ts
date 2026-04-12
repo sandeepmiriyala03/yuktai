@@ -1,32 +1,40 @@
+import { Lifecycle } from "./runtime/lifecycle/lifecycle";
 import { Runtime } from "./runtime/runtime";
 import { aiPlugin } from "./plugins/ai";
 import { voicePlugin } from "./plugins/voice";
 import { ocrSmartPlugin } from "./plugins/ocr";
 
-// 🔥 Create GLOBAL singleton (fixes Next.js duplication issue)
-const globalAny = globalThis as any;
-
-if (!globalAny.__yuktai_runtime__) {
-  const runtime = new Runtime();
-
-  // ✅ Register plugins ONLY once
-  runtime.register(aiPlugin.name, aiPlugin);
-  runtime.register(voicePlugin.name, voicePlugin);
-  runtime.register(ocrSmartPlugin.name, ocrSmartPlugin);
-
-  // Save globally
-  globalAny.__yuktai_runtime__ = runtime;
+// 🔹 Extend global safely
+declare global {
+  var __yuktai_runtime__: Runtime | undefined;
 }
 
-// Use existing runtime
-const runtime: Runtime = globalAny.__yuktai_runtime__;
+// 🔹 Singleton runtime
+function getRuntime(): Runtime {
+  if (!globalThis.__yuktai_runtime__) {
+    const runtime = new Runtime();
 
-// ✅ Export API
-export default {
-  run: (task: string, input: any) => runtime.run(task, input),
+    runtime.register(aiPlugin.name, aiPlugin);
+    runtime.register(voicePlugin.name, voicePlugin);
+    runtime.register(ocrSmartPlugin.name, ocrSmartPlugin);
 
-  // 🔥 Optional debug helper
-  list: () => {
-    return Array.from((runtime as any).plugins.keys());
+    globalThis.__yuktai_runtime__ = runtime;
+  }
+
+  return globalThis.__yuktai_runtime__;
+}
+
+const runtime = getRuntime();
+
+// ✅ Public API
+const YuktAI = {
+  run(task: string, input: unknown, lifecycle?: Lifecycle) {
+    return runtime.run(task, input, lifecycle);
+  },
+
+  list(): string[] {
+    return runtime.getPlugins();
   }
 };
+
+export default YuktAI;

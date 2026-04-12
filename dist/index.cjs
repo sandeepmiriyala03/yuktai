@@ -34,20 +34,66 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
+// src/lifecycle/useYuktLifecycle.tsx
+var YuktLifecycle = class {
+  constructor(lifecycle) {
+    this.lifecycle = lifecycle;
+  }
+  init() {
+    this.lifecycle?.onInit?.();
+  }
+  process() {
+    this.lifecycle?.onProcess?.();
+  }
+  generate() {
+    this.lifecycle?.onGenerate?.();
+  }
+  execute() {
+    this.lifecycle?.onExecute?.();
+  }
+  enhance() {
+    this.lifecycle?.onEnhance?.();
+  }
+  render() {
+    this.lifecycle?.onRender?.();
+  }
+  error(err) {
+    this.lifecycle?.onError?.(err);
+  }
+};
+
 // src/runtime/runtime.ts
 var Runtime = class {
   constructor() {
     this.plugins = /* @__PURE__ */ new Map();
   }
+  // 🔹 Register plugin safely
   register(name, plugin) {
     this.plugins.set(name, plugin);
   }
-  async run(task, input) {
-    const plugin = this.plugins.get(task);
-    if (!plugin) {
-      throw new Error(`Plugin not found: ${task}`);
+  // 🔹 Run task with lifecycle
+  run(task, input, lifecycle) {
+    const lc = new YuktLifecycle(lifecycle);
+    try {
+      lc.init();
+      lc.process();
+      const plugin = this.plugins.get(task);
+      if (!plugin) {
+        throw new Error(`Plugin not found: ${task}`);
+      }
+      lc.execute();
+      const result = plugin.execute(input);
+      lc.enhance();
+      lc.render();
+      return result;
+    } catch (err) {
+      lc.error(err);
+      throw err;
     }
-    return plugin.execute(input);
+  }
+  // 🔹 Safe plugin listing
+  getPlugins() {
+    return Array.from(this.plugins.keys());
   }
 };
 
@@ -132,19 +178,23 @@ var ocrSmartPlugin = {
 };
 
 // src/index.ts
-var globalAny = globalThis;
-if (!globalAny.__yuktai_runtime__) {
-  const runtime2 = new Runtime();
-  runtime2.register(aiPlugin.name, aiPlugin);
-  runtime2.register(voicePlugin.name, voicePlugin);
-  runtime2.register(ocrSmartPlugin.name, ocrSmartPlugin);
-  globalAny.__yuktai_runtime__ = runtime2;
+function getRuntime() {
+  if (!globalThis.__yuktai_runtime__) {
+    const runtime2 = new Runtime();
+    runtime2.register(aiPlugin.name, aiPlugin);
+    runtime2.register(voicePlugin.name, voicePlugin);
+    runtime2.register(ocrSmartPlugin.name, ocrSmartPlugin);
+    globalThis.__yuktai_runtime__ = runtime2;
+  }
+  return globalThis.__yuktai_runtime__;
 }
-var runtime = globalAny.__yuktai_runtime__;
-var index_default = {
-  run: (task, input) => runtime.run(task, input),
-  // 🔥 Optional debug helper
-  list: () => {
-    return Array.from(runtime.plugins.keys());
+var runtime = getRuntime();
+var YuktAI = {
+  run(task, input, lifecycle) {
+    return runtime.run(task, input, lifecycle);
+  },
+  list() {
+    return runtime.getPlugins();
   }
 };
+var index_default = YuktAI;
