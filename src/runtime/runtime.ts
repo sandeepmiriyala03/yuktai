@@ -1,15 +1,16 @@
-import { YuktLifecycle, Lifecycle } from "../lifecycle/lifecycle";
-
 // 🔹 Define Plugin Interface
 export interface Plugin {
   name: string;
-  execute(input: unknown): unknown;
+  execute(input: any): any | Promise<any>;
 }
 
 export class Runtime {
   private plugins: Map<string, Plugin> = new Map();
 
-  // 🔹 Register plugin safely
+  /**
+   * 🔹 Register plugin safely
+   * Ensures the plugin exists and has a valid execute function.
+   */
   register(name: string, plugin: Plugin): void {
     if (!plugin || typeof plugin.execute !== "function") {
       throw new Error(`Invalid plugin: ${name}`);
@@ -18,36 +19,30 @@ export class Runtime {
     this.plugins.set(name, plugin);
   }
 
-  // 🔹 Run task with lifecycle
-  run(task: string, input: unknown, lifecycle?: Lifecycle): unknown {
-    const lc = new YuktLifecycle(lifecycle);
-
+  /**
+   * 🔹 Run task
+   * Simplified execution without lifecycle event overhead.
+   */
+  async run(task: string, input: unknown): Promise<unknown> {
     try {
-      lc.init();
-
-      lc.process();
-
       const plugin = this.plugins.get(task);
+
       if (!plugin) {
         throw new Error(`Plugin not found: ${task}`);
       }
 
-      lc.execute();
-
-      const result = plugin.execute(input);
-
-      lc.enhance();
-
-      lc.render();
-
-      return result;
+      // Execute and return result (handles both sync and async plugins)
+      return await plugin.execute(input);
+      
     } catch (err) {
-      lc.error(err);
+      console.error(`[YuktAI Runtime Error in ${task}]:`, err);
       throw err;
     }
   }
 
-  // 🔹 Safe plugin listing
+  /**
+   * 🔹 Safe plugin listing
+   */
   getPlugins(): string[] {
     return Array.from(this.plugins.keys());
   }

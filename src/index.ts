@@ -1,9 +1,10 @@
-import { Lifecycle } from "./runtime/lifecycle/lifecycle";
+
+
 import { Runtime } from "./runtime/runtime";
 import { aiPlugin } from "./plugins/ai";
 import { voicePlugin } from "./plugins/voice";
 import { ocrSmartPlugin } from "./plugins/ocr";
-
+import { wcagPlugin } from './plugins/wcag';
 // 🔹 Extend global safely
 declare global {
   var __yuktai_runtime__: Runtime | undefined;
@@ -17,7 +18,7 @@ function getRuntime(): Runtime {
     runtime.register(aiPlugin.name, aiPlugin);
     runtime.register(voicePlugin.name, voicePlugin);
     runtime.register(ocrSmartPlugin.name, ocrSmartPlugin);
-
+    runtime.register(wcagPlugin.name, wcagPlugin);
     globalThis.__yuktai_runtime__ = runtime;
   }
 
@@ -28,9 +29,7 @@ const runtime = getRuntime();
 
 // ✅ Public API
 const YuktAI = {
-  run(task: string, input: unknown, lifecycle?: Lifecycle) {
-    return runtime.run(task, input, lifecycle);
-  },
+
 
   list(): string[] {
     return runtime.getPlugins();
