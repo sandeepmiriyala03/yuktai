@@ -1,3 +1,7 @@
+// lib/wcagPlugin.ts
+// Place this file at:  src/lib/wcagPlugin.ts
+// Import it anywhere:  import { wcagPlugin } from "@/lib/wcagPlugin"
+
 export interface A11yConfig {
   enabled: boolean;
   highContrast?: boolean;
@@ -6,14 +10,21 @@ export interface A11yConfig {
   root?: HTMLElement | Document;
 }
 
+export interface A11yReport {
+  fixed: number;
+  scanned: number;
+}
+
 export const wcagPlugin = {
   name: "ui.a11y.pro",
+  version: "1.0.0",
   observer: null as MutationObserver | null,
 
-  async execute(config: A11yConfig) {
+  // ── Main entry point ────────────────────────────────────────
+  async execute(config: A11yConfig): Promise<A11yReport | string> {
     if (!config?.enabled) {
       this.stopObserver();
-      return "WCAG disabled";
+      return "yuktai-a11y: disabled";
     }
 
     const report = this.applyFixes(config);
@@ -23,21 +34,23 @@ export const wcagPlugin = {
     }
 
     this.ensureLiveRegion();
-    this.announce(`Accessibility enabled. ${report.fixed} fixes applied`);
+    this.announce(`Accessibility active. ${report.fixed} fixes applied.`);
 
-    return {
-      fixed: report.fixed,
-      scanned: report.scanned,
-    };
+    return report;
   },
 
-  applyFixes(config: A11yConfig) {
-    const report = { fixed: 0, scanned: 0 };
+  // ── DOM fixer ───────────────────────────────────────────────
+  // IMPORTANT: never touches `id` attributes — developer owns those
+  applyFixes(config: A11yConfig): A11yReport {
+    const report: A11yReport = { fixed: 0, scanned: 0 };
+
+    // SSR guard — never runs on the server
+    if (typeof document === "undefined") return report;
 
     const root = config.root || document;
 
     const elements = root.querySelectorAll(
-      "a[href],button,input,select,textarea,img,table,[onclick],[role],[tabindex],[contenteditable],h1,h2,h3,h4,h5,h6"
+      "a,button,input,select,textarea,img,table,[onclick],[tabindex],h1,h2,h3,h4,h5,h6"
     );
 
     report.scanned = elements.length;
@@ -45,102 +58,115 @@ export const wcagPlugin = {
     let lastHeadingLevel = 0;
 
     elements.forEach((el) => {
-      const htmlEl = el as HTMLElement;
-      const tag = htmlEl.tagName.toLowerCase();
+      const h = el as HTMLElement;
+      const tag = h.tagName.toLowerCase();
 
-      // 🏗️ Heading hierarchy
+      // 1. Heading hierarchy — fix skipped levels
       if (/^h[1-6]$/.test(tag)) {
         const level = parseInt(tag[1]);
         if (level > lastHeadingLevel + 1 && lastHeadingLevel !== 0) {
-          htmlEl.setAttribute("aria-level", String(lastHeadingLevel + 1));
+          h.setAttribute("aria-level", String(lastHeadingLevel + 1));
           report.fixed++;
         }
         lastHeadingLevel = level;
       }
 
-      // 🔗 Empty buttons/links
-      if ((tag === "a" || tag === "button") && !htmlEl.innerText.trim()) {
-        if (!htmlEl.getAttribute("aria-label")) {
-          htmlEl.setAttribute("aria-label", "Action");
+      // 2. Empty buttons / links — add fallback aria-label
+      if ((tag === "a" || tag === "button") && !h.innerText.trim()) {
+        if (!h.getAttribute("aria-label")) {
+          const label = h.getAttribute("title") || "Interactive element";
+          h.setAttribute("aria-label", label);
           report.fixed++;
         }
       }
 
-      // 🖱️ Clickable elements
-      const hasClick =
-        htmlEl.hasAttribute("onclick") ||
-        window.getComputedStyle(htmlEl).cursor === "pointer";
+      // 3. Clickable non-interactive elements → role + keyboard
+      const isClickable =
+        h.hasAttribute("onclick") ||
+        (typeof window !== "undefined" &&
+          window.getComputedStyle(h).cursor === "pointer");
 
-      if (hasClick && !["button", "a", "input"].includes(tag)) {
-        if (!htmlEl.getAttribute("role")) {
-          htmlEl.setAttribute("role", "button");
+      if (isClickable && !["button", "a", "input", "select", "textarea"].includes(tag)) {
+        if (!h.getAttribute("role")) {
+          h.setAttribute("role", "button");
           report.fixed++;
         }
-
-        if (htmlEl.tabIndex < 0) {
-          htmlEl.tabIndex = 0;
+        if (h.tabIndex < 0) {
+          h.tabIndex = 0;
           report.fixed++;
         }
-
-        // prevent duplicate listener
-        if (!(htmlEl as any)._a11yKeyBound) {
-          htmlEl.addEventListener("keydown", (e) => {
+        // Prevent adding duplicate keyboard listener
+        if (!(h as any)._yuktKeyBound) {
+          h.addEventListener("keydown", (e: KeyboardEvent) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              htmlEl.click();
+              h.click();
             }
           });
-          (htmlEl as any)._a11yKeyBound = true;
+          (h as any)._yuktKeyBound = true;
         }
       }
 
-      // 📋 Forms
+      // 4. Form fields — inject aria-label from placeholder
+      //    We never touch id — developer controls label association
       if (["input", "select", "textarea"].includes(tag)) {
-        if (!htmlEl.getAttribute("aria-label")) {
-          const placeholder =
-            htmlEl.getAttribute("placeholder") || "User input";
-          htmlEl.setAttribute("aria-label", placeholder);
+        if (!h.getAttribute("aria-label") && !h.getAttribute("aria-labelledby")) {
+          const label =
+            h.getAttribute("placeholder") ||
+            h.getAttribute("name") ||
+            tag;
+          h.setAttribute("aria-label", label);
           report.fixed++;
         }
-
-        if (htmlEl.hasAttribute("required")) {
-          htmlEl.setAttribute("aria-required", "true");
+        if (h.hasAttribute("required") && !h.getAttribute("aria-required")) {
+          h.setAttribute("aria-required", "true");
+          report.fixed++;
         }
       }
 
-      // 🖼️ Images
-      if (tag === "img" && !htmlEl.hasAttribute("alt")) {
-        htmlEl.setAttribute("alt", "");
+      // 5. Images — empty alt for decorative images
+      if (tag === "img" && !h.hasAttribute("alt")) {
+        h.setAttribute("alt", "");
+        h.setAttribute("aria-hidden", "true");
         report.fixed++;
       }
 
-      // 📊 Tables
-      if (tag === "table" && !htmlEl.querySelector("th")) {
-        htmlEl.setAttribute("role", "grid");
-        report.fixed++;
+      // 6. Tables without headers
+      if (tag === "table" && !el.querySelector("th")) {
+        if (!h.getAttribute("role")) {
+          h.setAttribute("role", "grid");
+          report.fixed++;
+        }
       }
     });
 
-    // 🎨 Global adjustments
+    // 7. Visual preferences — applied at document root level
     if (config.highContrast) {
-      document.documentElement.style.filter =
-        "contrast(1.15) brightness(1.05)";
+      document.documentElement.style.filter = "contrast(1.15) brightness(1.05)";
     }
-
     if (config.reduceMotion) {
       document.documentElement.style.scrollBehavior = "auto";
+      // Also inject a global style rule for prefers-reduce-motion
+      if (!document.getElementById("yukt-reduce-motion")) {
+        const style = document.createElement("style");
+        style.id = "yukt-reduce-motion";
+        style.textContent = `*, *::before, *::after { transition: none !important; animation: none !important; }`;
+        document.head.appendChild(style);
+      }
     }
 
     return report;
   },
 
+  // ── MutationObserver — watches for new DOM nodes ────────────
   startObserver(config: A11yConfig) {
-    if (this.observer) return;
+    if (this.observer || typeof document === "undefined") return;
 
     this.observer = new MutationObserver((mutations) => {
       mutations.forEach((m) => {
         m.addedNodes.forEach((node) => {
           if (node instanceof HTMLElement) {
+            // Only scan the newly added subtree — not the full page again
             this.applyFixes({ ...config, root: node });
           }
         });
@@ -160,30 +186,28 @@ export const wcagPlugin = {
     }
   },
 
+  // ── Screen reader live region ────────────────────────────────
   ensureLiveRegion() {
-    let node = document.querySelector(
-      '[aria-live="polite"]'
-    ) as HTMLElement | null;
+    if (typeof document === "undefined") return;
+    if (document.getElementById("yukt-sr-announcer")) return;
 
-    if (!node) {
-      node = document.createElement("div");
-      node.setAttribute("aria-live", "polite");
-      node.style.cssText =
-        "position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;";
-      document.body.appendChild(node);
-    }
+    const node = document.createElement("div");
+    node.id = "yukt-sr-announcer";
+    node.setAttribute("aria-live", "polite");
+    node.setAttribute("aria-atomic", "true");
+    node.style.cssText =
+      "position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;";
+    document.body.appendChild(node);
   },
 
   announce(msg: string) {
-    const node = document.querySelector(
-      '[aria-live="polite"]'
-    ) as HTMLElement | null;
-
-    if (node) {
-      node.textContent = "";
-      setTimeout(() => {
-        node!.textContent = msg;
-      }, 50);
-    }
+    if (typeof document === "undefined") return;
+    const node = document.getElementById("yukt-sr-announcer");
+    if (!node) return;
+    // Clear first, then set — forces screen readers to re-announce
+    node.textContent = "";
+    setTimeout(() => {
+      node.textContent = msg;
+    }, 50);
   },
 };
