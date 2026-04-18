@@ -3,6 +3,7 @@ export interface A11yConfig {
   highContrast?: boolean;
   reduceMotion?: boolean;
   autoFix?: boolean;
+  root?: HTMLElement | Document; // 🔥 optional scope support
 }
 
 export const wcagPlugin = {
@@ -30,9 +31,24 @@ export const wcagPlugin = {
   applyFixes(config: A11yConfig) {
     const report = { fixed: 0, scanned: 0 };
 
-    // 🔥 OPTIMIZED SELECTOR (IMPORTANT)
-    const elements = document.querySelectorAll(
-      "a, button, input, select, textarea, img, table, [onclick], [role], h1, h2, h3, h4, h5, h6"
+    const root = config.root || document;
+
+    // 🔥 FINAL OPTIMIZED SELECTOR
+    const elements = root.querySelectorAll(
+      `
+      a[href],
+      button,
+      input,
+      select,
+      textarea,
+      img,
+      table,
+      [onclick],
+      [role],
+      [tabindex],
+      [contenteditable],
+      h1, h2, h3, h4, h5, h6
+      `
     );
 
     report.scanned = elements.length;
@@ -41,6 +57,11 @@ export const wcagPlugin = {
 
     elements.forEach((el) => {
       const htmlEl = el as HTMLElement;
+
+      // 🚀 skip already processed elements (performance)
+      if (htmlEl.hasAttribute("data-a11y-checked")) return;
+      htmlEl.setAttribute("data-a11y-checked", "true");
+
       const tag = htmlEl.tagName.toLowerCase();
 
       // 🏗️ Heading hierarchy
@@ -61,7 +82,7 @@ export const wcagPlugin = {
         }
       }
 
-      // 🖱️ Clickable div fix
+      // 🖱️ Clickable elements fix
       const hasClick =
         htmlEl.hasAttribute("onclick") ||
         window.getComputedStyle(htmlEl).cursor === "pointer";
@@ -77,13 +98,17 @@ export const wcagPlugin = {
           report.fixed++;
         }
 
-        // ✅ SAFE event (no overwrite)
-        htmlEl.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            htmlEl.click();
-          }
-        });
+        // ✅ avoid duplicate listeners
+        if (!htmlEl.hasAttribute("data-a11y-key")) {
+          htmlEl.setAttribute("data-a11y-key", "true");
+
+          htmlEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              htmlEl.click();
+            }
+          });
+        }
       }
 
       // 📋 Forms
@@ -112,11 +137,11 @@ export const wcagPlugin = {
         report.fixed++;
       }
 
-      // 🔥 Visual debug (optional)
+      // 🔥 debug marker (optional)
       htmlEl.setAttribute("data-a11y-fixed", "true");
     });
 
-    // 🎨 GLOBAL visual fixes (not per element!)
+    // 🎨 Global visual adjustments
     if (config.highContrast) {
       document.documentElement.style.filter =
         "contrast(1.15) brightness(1.05)";
@@ -149,7 +174,7 @@ export const wcagPlugin = {
     }
   },
 
-  // ✅ NO ID — PURE DOM
+  // ✅ pure DOM live region (no id)
   ensureLiveRegion() {
     let node = document.querySelector(
       '[aria-live="polite"]'
