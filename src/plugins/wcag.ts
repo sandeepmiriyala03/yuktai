@@ -11,9 +11,9 @@ export const wcagPlugin = {
   observer: null as MutationObserver | null,
 
   async execute(config: A11yConfig) {
-    if (!config.enabled) {
+    if (!config?.enabled) {
       this.stopObserver();
-      return "WCAG enforcement disabled.";
+      return "WCAG disabled";
     }
 
     const report = this.applyFixes(config);
@@ -23,9 +23,12 @@ export const wcagPlugin = {
     }
 
     this.ensureLiveRegion();
-    this.announce(`Accessibility enabled. ${report.fixed} issues fixed`);
+    this.announce(`Accessibility enabled. ${report.fixed} fixes applied`);
 
-    return `♿ Fixed ${report.fixed} issues across ${report.scanned} elements`;
+    return {
+      fixed: report.fixed,
+      scanned: report.scanned,
+    };
   },
 
   applyFixes(config: A11yConfig) {
@@ -45,11 +48,6 @@ export const wcagPlugin = {
       const htmlEl = el as HTMLElement;
       const tag = htmlEl.tagName.toLowerCase();
 
-      // ✅ FIXED: allow re-processing safely
-      if (!htmlEl.hasAttribute("data-a11y-checked")) {
-        htmlEl.setAttribute("data-a11y-checked", "true");
-      }
-
       // 🏗️ Heading hierarchy
       if (/^h[1-6]$/.test(tag)) {
         const level = parseInt(tag[1]);
@@ -63,12 +61,12 @@ export const wcagPlugin = {
       // 🔗 Empty buttons/links
       if ((tag === "a" || tag === "button") && !htmlEl.innerText.trim()) {
         if (!htmlEl.getAttribute("aria-label")) {
-          htmlEl.setAttribute("aria-label", "Action button");
+          htmlEl.setAttribute("aria-label", "Action");
           report.fixed++;
         }
       }
 
-      // 🖱️ Clickable elements fix
+      // 🖱️ Clickable elements
       const hasClick =
         htmlEl.hasAttribute("onclick") ||
         window.getComputedStyle(htmlEl).cursor === "pointer";
@@ -84,15 +82,15 @@ export const wcagPlugin = {
           report.fixed++;
         }
 
-        if (!htmlEl.hasAttribute("data-a11y-key")) {
-          htmlEl.setAttribute("data-a11y-key", "true");
-
+        // prevent duplicate listener
+        if (!(htmlEl as any)._a11yKeyBound) {
           htmlEl.addEventListener("keydown", (e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               htmlEl.click();
             }
           });
+          (htmlEl as any)._a11yKeyBound = true;
         }
       }
 
@@ -121,12 +119,9 @@ export const wcagPlugin = {
         htmlEl.setAttribute("role", "grid");
         report.fixed++;
       }
-
-      // optional debug
-      htmlEl.setAttribute("data-a11y-fixed", "true");
     });
 
-    // 🎨 global adjustments
+    // 🎨 Global adjustments
     if (config.highContrast) {
       document.documentElement.style.filter =
         "contrast(1.15) brightness(1.05)";
@@ -142,7 +137,6 @@ export const wcagPlugin = {
   startObserver(config: A11yConfig) {
     if (this.observer) return;
 
-    // ✅ FIXED: process only new DOM nodes
     this.observer = new MutationObserver((mutations) => {
       mutations.forEach((m) => {
         m.addedNodes.forEach((node) => {
