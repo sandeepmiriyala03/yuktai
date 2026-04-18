@@ -3,7 +3,7 @@ export interface A11yConfig {
   highContrast?: boolean;
   reduceMotion?: boolean;
   autoFix?: boolean;
-  root?: HTMLElement | Document; // 🔥 optional scope support
+  root?: HTMLElement | Document;
 }
 
 export const wcagPlugin = {
@@ -33,22 +33,8 @@ export const wcagPlugin = {
 
     const root = config.root || document;
 
-    // 🔥 FINAL OPTIMIZED SELECTOR
     const elements = root.querySelectorAll(
-      `
-      a[href],
-      button,
-      input,
-      select,
-      textarea,
-      img,
-      table,
-      [onclick],
-      [role],
-      [tabindex],
-      [contenteditable],
-      h1, h2, h3, h4, h5, h6
-      `
+      "a[href],button,input,select,textarea,img,table,[onclick],[role],[tabindex],[contenteditable],h1,h2,h3,h4,h5,h6"
     );
 
     report.scanned = elements.length;
@@ -57,12 +43,12 @@ export const wcagPlugin = {
 
     elements.forEach((el) => {
       const htmlEl = el as HTMLElement;
-
-      // 🚀 skip already processed elements (performance)
-      if (htmlEl.hasAttribute("data-a11y-checked")) return;
-      htmlEl.setAttribute("data-a11y-checked", "true");
-
       const tag = htmlEl.tagName.toLowerCase();
+
+      // ✅ FIXED: allow re-processing safely
+      if (!htmlEl.hasAttribute("data-a11y-checked")) {
+        htmlEl.setAttribute("data-a11y-checked", "true");
+      }
 
       // 🏗️ Heading hierarchy
       if (/^h[1-6]$/.test(tag)) {
@@ -98,7 +84,6 @@ export const wcagPlugin = {
           report.fixed++;
         }
 
-        // ✅ avoid duplicate listeners
         if (!htmlEl.hasAttribute("data-a11y-key")) {
           htmlEl.setAttribute("data-a11y-key", "true");
 
@@ -137,11 +122,11 @@ export const wcagPlugin = {
         report.fixed++;
       }
 
-      // 🔥 debug marker (optional)
+      // optional debug
       htmlEl.setAttribute("data-a11y-fixed", "true");
     });
 
-    // 🎨 Global visual adjustments
+    // 🎨 global adjustments
     if (config.highContrast) {
       document.documentElement.style.filter =
         "contrast(1.15) brightness(1.05)";
@@ -157,8 +142,15 @@ export const wcagPlugin = {
   startObserver(config: A11yConfig) {
     if (this.observer) return;
 
-    this.observer = new MutationObserver(() => {
-      this.applyFixes(config);
+    // ✅ FIXED: process only new DOM nodes
+    this.observer = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        m.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            this.applyFixes({ ...config, root: node });
+          }
+        });
+      });
     });
 
     this.observer.observe(document.body, {
@@ -174,7 +166,6 @@ export const wcagPlugin = {
     }
   },
 
-  // ✅ pure DOM live region (no id)
   ensureLiveRegion() {
     let node = document.querySelector(
       '[aria-live="polite"]'
