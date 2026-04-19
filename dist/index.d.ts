@@ -25,10 +25,9 @@ declare class Runtime {
  */
 declare function render(element: React.ReactNode, selector: string, enabled?: boolean): void;
 
-interface YuktAIWrapperProps {
+declare function YuktAIWrapper({ children }: {
     children?: React.ReactNode;
-}
-declare function YuktAIWrapper({ children }: YuktAIWrapperProps): react_jsx_runtime.JSX.Element;
+}): react_jsx_runtime.JSX.Element;
 
 declare global {
     var __yuktai_runtime__: Runtime | undefined;

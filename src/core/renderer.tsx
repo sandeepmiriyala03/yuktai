@@ -3,139 +3,113 @@ import React, { ReactElement } from "react";
 import ReactDOM from "react-dom/client";
 
 /**
+ * Metadata for the YuktAI reporting engine
+ */
+export interface A11yReport {
+  fixes: number;      // Total accessibility remediations
+  nodes: number;      // Total DOM nodes scanned
+  renderTime: number; // Processing time in milliseconds
+}
+
+/**
  * Universal DOM Accessibility Fixer
- * @param onFix Callback to increment the global fix counter in the Wrapper
+ * Deep-walks the React tree to inject ADA compliance attributes.
  */
 export function applyAccessibility(
   element: React.ReactNode, 
   enabled: boolean = true,
-  onFix?: () => void
+  report: A11yReport = { fixes: 0, nodes: 0, renderTime: 0 }
 ): React.ReactNode {
   
-  if (!enabled || !React.isValidElement(element)) {
+  // 1. START PERFORMANCE TIMER (Root Level Only)
+  const startTime = report.nodes === 0 ? performance.now() : 0;
+
+  if (!React.isValidElement(element)) {
     return element;
   }
+
+  // Increment total nodes scanned
+  report.nodes++;
 
   const el = element as ReactElement<any>;
   const props = { ...el.props };
   const type = el.type as any;
-  let hasBeenFixed = false;
+  let isModified = false;
 
-  // 1. FORMS & INPUTS
-  if (["input", "textarea", "select"].includes(type)) {
-    if (!props["aria-label"] && !props["aria-labelledby"]) {
-      props["aria-label"] = props.placeholder || props.name || `${type} input`;
-      hasBeenFixed = true;
+  // Process rules only if ADA Engine is enabled
+  if (enabled) {
+    // A. Forms & Inputs
+    if (["input", "textarea", "select"].includes(type)) {
+      if (!props["aria-label"] && !props["aria-labelledby"]) {
+        props["aria-label"] = props.placeholder || props.name || `${type} field`;
+        isModified = true;
+      }
     }
-  }
 
-  // 2. INTERACTIVE (Buttons & Links)
-  if (type === "button") {
-    if (!props["aria-label"] && !props.children) {
-      props["aria-label"] = "action button";
-      hasBeenFixed = true;
-    }
-  }
-
-  if (type === "a") {
-    if (props.href && !props["aria-label"] && !props.children) {
-      props["aria-label"] = `Link to ${props.href}`;
-      hasBeenFixed = true;
-    }
-    if (props.target === "_blank" && !props.rel) {
-      props.rel = "noopener noreferrer";
-      hasBeenFixed = true;
-    }
-  }
-
-  // 3. MEDIA
-  if (type === "img") {
-    if (props.alt === undefined || props.alt === null) {
+    // B. Media & Images
+    if (type === "img" && (props.alt === undefined || props.alt === null)) {
       props.alt = ""; 
       props["aria-hidden"] = "true";
-      hasBeenFixed = true;
+      isModified = true;
     }
-  }
-
-  if (["video", "audio", "iframe"].includes(type)) {
-    if (!props.title) {
+    if (["video", "audio", "iframe"].includes(type) && !props.title) {
       props.title = props.name || `${type} content`;
-      hasBeenFixed = true;
+      isModified = true;
     }
-  }
 
-  // 4. LANDMARKS
-  const landmarks: Record<string, string> = {
-    nav: "navigation",
-    header: "banner",
-    footer: "contentinfo",
-    main: "main",
-    aside: "complementary",
-    section: "region"
-  };
+    // C. Interactive Elements (Buttons/Links)
+    if (type === "a") {
+      if (props.target === "_blank" && !props.rel) {
+        props.rel = "noopener noreferrer";
+        isModified = true;
+      }
+    }
 
-  if (landmarks[type]) {
-    if (!props.role) {
+    // D. Vibe-Fix: Clickable Non-Interactive Elements
+    if ((type === "div" || type === "span") && props.onClick) {
+      if (!props.role) { props.role = "button"; isModified = true; }
+      if (props.tabIndex === undefined) { props.tabIndex = 0; isModified = true; }
+      
+      if (!props.onKeyDown) {
+        const originalOnClick = props.onClick;
+        props.onKeyDown = (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            originalOnClick(e);
+          }
+        };
+        isModified = true;
+      }
+    }
+
+    // E. Structural Landmarks
+    const landmarks: Record<string, string> = { nav: "navigation", header: "banner", footer: "contentinfo", main: "main" };
+    if (landmarks[type] && !props.role) {
       props.role = landmarks[type];
-      hasBeenFixed = true;
+      isModified = true;
     }
+
+    // F. Data Structures
+    if (["ul", "ol"].includes(type) && !props.role) { props.role = "list"; isModified = true; }
+    if (type === "li" && !props.role) { props.role = "listitem"; isModified = true; }
+
+    // If any change was made to this node, update the report
+    if (isModified) report.fixes++;
   }
 
-  // 5. DATA STRUCTURES
-  if (type === "table") {
-    if (!props.role) {
-      props.role = "table";
-      hasBeenFixed = true;
-    }
-  }
-
-  if (["ul", "ol"].includes(type) && !props.role) {
-    props.role = "list";
-    hasBeenFixed = true;
-  }
-
-  // 6. CLICKABLE NON-INTERACTIVE (The "Vibe" Fix)
-  if ((type === "div" || type === "span") && props.onClick) {
-    if (!props.role) {
-      props.role = "button";
-      hasBeenFixed = true;
-    }
-    if (props.tabIndex === undefined) {
-      props.tabIndex = 0;
-      hasBeenFixed = true;
-    }
-    
-    if (!props.onKeyDown) {
-      const originalOnClick = props.onClick;
-      props.onKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          originalOnClick(e);
-        }
-      };
-      hasBeenFixed = true;
-    }
-  }
-
-  // 7. TYPOGRAPHY
-  if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(type)) {
-    if (!props.id && typeof props.children === "string") {
-      props.id = props.children.toLowerCase().trim().replace(/\s+/g, "-");
-      hasBeenFixed = true;
-    }
-  }
-
-  // If this specific element was touched, notify the counter
-  if (hasBeenFixed && onFix) {
-    onFix();
-  }
-
-  // RECURSIVE DEEP-WALK
+  // 2. RECURSIVE WALK (Process children while maintaining report state)
   const children = React.Children.map(props.children, (child: React.ReactNode) =>
-    React.isValidElement(child) ? applyAccessibility(child, enabled, onFix) : child
+    React.isValidElement(child) ? applyAccessibility(child, enabled, report) : child
   );
 
-  return React.cloneElement(el, props, children);
+  const finalElement = React.cloneElement(el, props, children);
+
+  // 3. FINALIZE PERFORMANCE TIMER (Root Level Only)
+  if (startTime > 0) {
+    report.renderTime = parseFloat((performance.now() - startTime).toFixed(2));
+  }
+
+  return finalElement;
 }
 
 /**
@@ -149,7 +123,8 @@ export function render(
   const container = document.querySelector(selector);
   if (!container) return;
 
-  const accessibleElement = applyAccessibility(element, enabled);
+  const report: A11yReport = { fixes: 0, nodes: 0, renderTime: 0 };
+  const accessibleElement = applyAccessibility(element, enabled, report);
   const root = ReactDOM.createRoot(container as HTMLElement);
   
   root.render(

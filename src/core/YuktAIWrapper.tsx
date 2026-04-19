@@ -1,182 +1,133 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { wcagPlugin } from "../plugins/wcag";
-import { applyAccessibility } from "./renderer";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { applyAccessibility, A11yReport } from "./renderer";
 
-interface YuktAIWrapperProps {
-  children?: React.ReactNode;
-}
-
-type WCAGLevel = "A" | "AA" | "AAA";
-
-interface WidgetSettings {
-  enabled: boolean;        
-  highContrast: boolean;
-  dyslexiaFont: boolean;
-  fontScale: number;       
-  wcagLevel: WCAGLevel;    
-}
-
-const DEFAULT_SETTINGS: WidgetSettings = {
-  enabled: true,
-  highContrast: false,
-  dyslexiaFont: false,
-  fontScale: 100,
-  wcagLevel: "AA",
-};
-
-export default function YuktAIWrapper({ children }: YuktAIWrapperProps) {
+export default function YuktAIWrapper({ children }: { children?: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
+  const [enabled, setEnabled] = useState(false);
   const [open, setOpen] = useState(false);
-  const [settings, setSettings] = useState<WidgetSettings>(DEFAULT_SETTINGS);
-  const [fixCount, setFixCount] = useState(0); // 🔹 Tracks applied fixes
   
-  const panelRef = useRef<HTMLDivElement>(null);
-  const fabRef = useRef<HTMLButtonElement>(null);
+  // Local state for the report to ensure the UI re-renders with new stats
+  const [stats, setStats] = useState<A11yReport>({ fixes: 0, nodes: 0, renderTime: 0 });
 
-  // 1. Initial Mount
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Initial mount to prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
-    const init = async () => {
-      await (wcagPlugin.execute as any)({ 
-        enabled: settings.enabled, 
-        autoFix: true,
-        level: settings.wcagLevel 
-      });
-    };
-    init();
-    return () => wcagPlugin.stopObserver();
   }, []);
 
-  // 2. Global Styles (Contrast, Fonts, Scaling)
-  const applyGlobalStyles = useCallback(async (updatedSettings: WidgetSettings) => {
-    await (wcagPlugin.execute as any)({
-      enabled: updatedSettings.enabled,
-      highContrast: updatedSettings.highContrast,
-      autoFix: true,
-      level: updatedSettings.wcagLevel
-    });
-
-    document.documentElement.style.fontSize = `${updatedSettings.fontScale}%`;
-
-    const styleId = "yuktai-dyslexia-css";
-    let styleTag = document.getElementById(styleId);
-    if (updatedSettings.dyslexiaFont) {
-      if (!styleTag) {
-        styleTag = document.createElement("style");
-        styleTag.id = styleId;
-        styleTag.textContent = `body, body * { font-family: 'OpenDyslexic', 'Georgia', serif !important; line-height: 1.6 !important; }`;
-        document.head.appendChild(styleTag);
-      }
-    } else {
-      styleTag?.remove();
+  // Process the Virtual DOM and capture stats
+  const content = useMemo(() => {
+    const report: A11yReport = { fixes: 0, nodes: 0, renderTime: 0 };
+    const result = applyAccessibility(children, enabled, report);
+    
+    // We update stats inside a microtask to avoid "render while rendering" warnings
+    if (mounted) {
+      Promise.resolve().then(() => setStats(report));
     }
-  }, []);
+    
+    return result;
+  }, [children, enabled, mounted]);
 
-  const updateSetting = <K extends keyof WidgetSettings>(key: K, val: WidgetSettings[K]) => {
-    const newSettings = { ...settings, [key]: val };
-    setSettings(newSettings);
-    applyGlobalStyles(newSettings);
-    // Reset fix count on toggle so it recalculates
-    if (key === 'enabled') setFixCount(0);
-  };
+  // Handle outside clicks to close the popup
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
-  // 3. Transformation Logic with Counter
-  // This passes a 'tick' function to the renderer to count changes
-  const content = mounted 
-    ? applyAccessibility(children, settings.enabled, 
-        () => setFixCount(prev => prev + 1)) 
-    : children;
+  if (!mounted) return <>{children}</>;
 
   return (
     <>
       {content}
 
-      {/* Floating Action Button with Notification Badge */}
+      {/* Floating Action Button (FAB) */}
       <button
-        ref={fabRef}
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
-        aria-label="Accessibility Menu"
+        onClick={() => setOpen(true)}
+        aria-label="Open Accessibility Menu"
         style={{
-          position: "fixed", bottom: 20, right: 20, width: 60, height: 60,
-          borderRadius: "50%", background: settings.enabled ? "#0d9488" : "#4b5563", 
-          color: "#fff", border: "none", cursor: "pointer", zIndex: 10000,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
+          position: "fixed", bottom: 25, right: 25, width: 60, height: 60,
+          borderRadius: "50%", background: "#1a202c", color: "white",
+          border: "none", cursor: "pointer", zIndex: 9999,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.25)", display: "flex",
+          alignItems: "center", justifyContent: "center", fontSize: "28px"
         }}
       >
-        <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
-          <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/>
-        </svg>
-        {settings.enabled && fixCount > 0 && (
-          <span style={{
-            position: 'absolute', top: -4, right: -4, background: '#ef4444',
-            color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: 10, fontWeight: 'bold'
-          }}>
-            {fixCount}
-          </span>
-        )}
+        ♿
       </button>
 
+      {/* Accessibility Popup */}
       {open && (
-        <div ref={panelRef} style={{
-          position: "fixed", bottom: 90, right: 20, width: 320,
-          background: "#fff", borderRadius: 16, padding: 24,
-          boxShadow: "0 10px 40px rgba(0,0,0,0.2)", zIndex: 10001, 
-          border: "1px solid #e5e7eb", color: "#111827", fontFamily: "sans-serif"
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-            <h3 style={{ margin: 0, fontSize: 18 }}>YuktAI Engine</h3>
-            <span style={{ fontSize: 11, fontWeight: 700, color: settings.enabled ? '#0d9488' : '#94a3b8' }}>
-              {settings.enabled ? "● ONLINE" : "○ OFFLINE"}
-            </span>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            
-            {/* MASTER ADA TOGGLE */}
-            <button 
-              onClick={() => updateSetting('enabled', !settings.enabled)}
-              style={{
-                width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
-                background: settings.enabled ? '#f0fdf4' : '#f8fafc',
-                border: settings.enabled ? '2px solid #0d9488' : '1px solid #cbd5e1',
-                color: settings.enabled ? '#065f46' : '#475569',
-                fontWeight: 600, display: 'flex', justifyContent: 'space-between'
-              }}
-            >
-              {settings.enabled ? "Disable ADA Engine" : "Enable ADA Engine"}
-              <span>{settings.enabled ? "✓" : "→"}</span>
-            </button>
-
-            {/* LIVE INFORMATION */}
-            {settings.enabled && (
-              <div style={{ padding: '10px', background: '#f1f5f9', borderRadius: 8, fontSize: 12 }}>
-                🚀 <strong>{fixCount}</strong> potential accessibility issues auto-fixed.
-              </div>
-            )}
-
-            <div style={{ borderBottom: '1px solid #f1f5f9', margin: '8px 0' }} />
-
-            {/* FONT SCALER */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 12, color: '#64748b' }}>Zoom Level: {settings.fontScale}%</span>
-              <input type="range" min="100" max="200" step="10" value={settings.fontScale} onChange={e => updateSetting('fontScale', parseInt(e.target.value))} style={{ accentColor: '#0d9488' }} />
+        <div 
+          ref={panelRef}
+          style={{
+            position: "fixed", bottom: 95, right: 25, width: 340,
+            background: "#ffffff", borderRadius: "20px", padding: "24px",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.15)", zIndex: 10000,
+            border: "1px solid #f0f0f0", fontFamily: "system-ui, -apple-system, sans-serif"
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "22px" }}>♿</span>
+              <strong style={{ fontSize: "18px", color: "#1a202c" }}>ADA accessibility</strong>
             </div>
+            <button 
+              onClick={() => setOpen(false)}
+              style={{ background: "none", border: "none", fontSize: "24px", color: "#a0aec0", cursor: "pointer" }}
+            >
+              ×
+            </button>
+          </div>
 
-            <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              Contrast Mode <input type="checkbox" checked={settings.highContrast} onChange={e => updateSetting('highContrast', e.target.checked)} />
+          {/* Enable/Disable Toggle */}
+          <button
+            onClick={() => setEnabled(!enabled)}
+            style={{
+              width: "100%", padding: "16px", borderRadius: "12px", border: "none",
+              cursor: "pointer", fontWeight: "700", fontSize: "16px",
+              background: enabled ? "#dcfce7" : "#eff6ff",
+              color: enabled ? "#065f46" : "#2563eb",
+              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)", marginBottom: "20px"
+            }}
+          >
+            {enabled ? "Disable ADA" : "Enable ADA"}
+          </button>
+
+          {/* Feature List (Visual Only) */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "14px", color: "#4a5568", cursor: "pointer" }}>
+              <input type="checkbox" checked={enabled} readOnly style={{ width: "16px", height: "16px" }} />
+              High contrast
             </label>
-
-            <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              Dyslexia Font <input type="checkbox" checked={settings.dyslexiaFont} onChange={e => updateSetting('dyslexiaFont', e.target.checked)} />
+            <label style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "14px", color: "#4a5568", cursor: "pointer" }}>
+              <input type="checkbox" checked={enabled} readOnly style={{ width: "16px", height: "16px" }} />
+              Keyboard navigation hints
             </label>
           </div>
-          
-          <button onClick={() => setOpen(false)} style={{ width: '100%', marginTop: 24, padding: 12, background: '#0f172a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
-            Done
-          </button>
+
+          {/* Footer Report (Matches your screenshots) */}
+          <div style={{ borderTop: "1px solid #edf2f7", paddingTop: "16px", fontSize: "12px", lineHeight: "1.5", color: "#718096" }}>
+            {enabled ? (
+              <>
+                <div style={{ color: "#2d3748", fontWeight: "600", marginBottom: "4px" }}>
+                  yuktai-a11y: {stats.fixes} fixes applied across {stats.nodes} nodes.
+                </div>
+                <div>Render time: <span style={{ color: "#4a5568" }}>{stats.renderTime}ms</span></div>
+              </>
+            ) : (
+              <div style={{ color: "#a0aec0", fontStyle: "italic" }}>ADA disabled.</div>
+            )}
+          </div>
         </div>
       )}
     </>
