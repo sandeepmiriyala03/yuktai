@@ -1,5 +1,5 @@
 {
-  "name": "yuktai",
+  "name": "@yuktishaalaa/yuktai",
   "version": "1.0.1",
   "description": "Privacy-first, offline-first Indic language AI and Web Orchestrator",
   "type": "module",
@@ -14,7 +14,8 @@
     }
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "files": [
     "dist"
@@ -99,5 +100,11 @@
   "bugs": {
     "url": "https://github.com/sandeepmiriyala03/yuktai/issues"
   },
-  "homepage": "https://github.com/sandeepmiriyala03/yuktai#readme"
+  "homepage": "https://github.com/sandeepmiriyala03/yuktai#readme",
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  }
 }
