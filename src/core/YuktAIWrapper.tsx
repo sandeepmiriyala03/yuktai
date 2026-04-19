@@ -18,7 +18,7 @@ interface WidgetSettings {
 }
 
 const DEFAULT_SETTINGS: WidgetSettings = {
-  enabled: true, // Active by default
+  enabled: true,
   highContrast: false,
   reduceMotion: false,
   autoFix: true,
@@ -27,23 +27,19 @@ const DEFAULT_SETTINGS: WidgetSettings = {
 };
 
 export default function YuktAIWrapper({ children }: YuktAIWrapperProps) {
-  // 1. Layer 1: Static React Fixes (Runs during render)
   const accessibleChildren = children ? applyAccessibility(children) : null;
 
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<WidgetSettings>(DEFAULT_SETTINGS);
-  const [isActive, setIsActive] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
 
   const set = <K extends keyof WidgetSettings>(key: K, val: WidgetSettings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: val }));
 
-  // 2. Layer 2 & 3: Runtime DOM Observer (Runs on mount)
   useEffect(() => {
     const init = async () => {
       await wcagPlugin.execute({ enabled: true, autoFix: true });
-      setIsActive(true);
     };
     init();
     return () => wcagPlugin.stopObserver();
@@ -53,8 +49,13 @@ export default function YuktAIWrapper({ children }: YuktAIWrapperProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node) &&
-          fabRef.current && !fabRef.current.contains(e.target as Node)) setOpen(false);
+      // Ensure we check if the click was on the FAB or the Panel
+      const isFabClick = fabRef.current?.contains(e.target as Node);
+      const isPanelClick = panelRef.current?.contains(e.target as Node);
+      
+      if (!isFabClick && !isPanelClick) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -71,7 +72,6 @@ export default function YuktAIWrapper({ children }: YuktAIWrapperProps) {
     await wcagPlugin.execute(config);
     document.documentElement.style.fontSize = `${settings.fontScale}%`;
 
-    // Dyslexia Mode
     const existingStyle = document.getElementById("yuktai-dyslexia");
     if (settings.dyslexiaFont) {
       if (!existingStyle) {
@@ -90,39 +90,65 @@ export default function YuktAIWrapper({ children }: YuktAIWrapperProps) {
     <>
       {accessibleChildren}
 
-      {/* FAB */}
+      {/* FAB - Using pointer-events on child ensures button always gets the click */}
       <button
         ref={fabRef}
-        onClick={() => setOpen(!open)}
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent bubbling issues
+          setOpen((prev) => !prev);
+        }}
+        aria-label="Accessibility Menu"
         style={{
-          position: "fixed", bottom: 20, right: 20, width: 50, height: 50,
+          position: "fixed", bottom: 20, right: 20, width: 56, height: 56,
           borderRadius: "50%", background: "#0d9488", color: "#fff",
-          border: "none", cursor: "pointer", zIndex: 9999,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+          border: "none", cursor: "pointer", zIndex: 10000, // Higher Z-Index
+          boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}
       >
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+        <svg 
+          viewBox="0 0 24 24" 
+          width="32" 
+          height="32" 
+          fill="currentColor" 
+          style={{ pointerEvents: 'none' }} // 🔹 CRITICAL: Icon won't block click
+        >
           <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/>
         </svg>
       </button>
 
       {/* Settings Panel */}
       {open && (
-        <div ref={panelRef} style={{
-          position: "fixed", bottom: 80, right: 20, width: 280,
-          background: "#fff", borderRadius: 12, padding: 16,
-          boxShadow: "0 10px 25px rgba(0,0,0,0.1)", zIndex: 9999, border: "1px solid #eee"
-        }}>
-          <h4 style={{ margin: "0 0 15px", color: "#333" }}>Accessibility Menu</h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-             <label style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
-               High Contrast <input type="checkbox" checked={settings.highContrast} onChange={e => set('highContrast', e.target.checked)} />
+        <div 
+          ref={panelRef} 
+          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside menu
+          style={{
+            position: "fixed", bottom: 90, right: 20, width: 280,
+            background: "#ffffff", borderRadius: 16, padding: 20,
+            boxShadow: "0 10px 40px rgba(0,0,0,0.2)", zIndex: 10001, 
+            border: "1px solid #e5e7eb", color: "#111827",
+            fontFamily: "sans-serif"
+          }}
+        >
+          <h4 style={{ margin: "0 0 15px", fontSize: 18, fontWeight: 600 }}>Accessibility Menu</h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+             <label style={{ fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+               High Contrast 
+               <input type="checkbox" style={{ width: 18, height: 18 }} checked={settings.highContrast} onChange={e => set('highContrast', e.target.checked)} />
              </label>
-             <label style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
-               Dyslexia Font <input type="checkbox" checked={settings.dyslexiaFont} onChange={e => set('dyslexiaFont', e.target.checked)} />
+             <label style={{ fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+               Dyslexia Font 
+               <input type="checkbox" style={{ width: 18, height: 18 }} checked={settings.dyslexiaFont} onChange={e => set('dyslexiaFont', e.target.checked)} />
              </label>
-             <button onClick={applySettings} style={{ marginTop: 10, padding: 8, background: "#0d9488", color: "#fff", border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-               Save Settings
+             <button 
+                onClick={applySettings} 
+                style={{ 
+                  marginTop: 10, padding: "12px", background: "#0d9488", 
+                  color: "#fff", border: 'none', borderRadius: 8, 
+                  fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' 
+                }}
+             >
+               Apply Changes
              </button>
           </div>
         </div>
