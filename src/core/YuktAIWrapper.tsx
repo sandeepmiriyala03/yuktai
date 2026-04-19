@@ -8,30 +8,39 @@ export default function YuktAIWrapper({ children }: { children?: React.ReactNode
   const [enabled, setEnabled] = useState(false);
   const [open, setOpen] = useState(false);
   
-  // Local state for the report to ensure the UI re-renders with new stats
+  // State for metrics used in the UI report
   const [stats, setStats] = useState<A11yReport>({ fixes: 0, nodes: 0, renderTime: 0 });
 
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Initial mount to prevent hydration mismatch
+  // Prevent hydration mismatch for Next.js 16.2
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Process the Virtual DOM and capture stats
+  /**
+   * Engine Execution
+   * Recursively scans children and accumulates the report data.
+   */
   const content = useMemo(() => {
     const report: A11yReport = { fixes: 0, nodes: 0, renderTime: 0 };
     const result = applyAccessibility(children, enabled, report);
     
-    // We update stats inside a microtask to avoid "render while rendering" warnings
+    // Update stats after the render pass completes
     if (mounted) {
-      Promise.resolve().then(() => setStats(report));
+      setTimeout(() => {
+        setStats((prev) => {
+          // Avoid unnecessary re-renders if the numbers haven't changed
+          if (prev.fixes === report.fixes && prev.nodes === report.nodes) return prev;
+          return { ...report };
+        });
+      }, 0);
     }
     
     return result;
   }, [children, enabled, mounted]);
 
-  // Handle outside clicks to close the popup
+  // Handle outside clicks to dismiss the popup
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -47,9 +56,10 @@ export default function YuktAIWrapper({ children }: { children?: React.ReactNode
 
   return (
     <>
+      {/* Accessible Content */}
       {content}
 
-      {/* Floating Action Button (FAB) */}
+      {/* Floating Action Button */}
       <button
         onClick={() => setOpen(true)}
         aria-label="Open Accessibility Menu"
@@ -64,7 +74,7 @@ export default function YuktAIWrapper({ children }: { children?: React.ReactNode
         ♿
       </button>
 
-      {/* Accessibility Popup */}
+      {/* ADA Popup Menu */}
       {open && (
         <div 
           ref={panelRef}
@@ -89,7 +99,7 @@ export default function YuktAIWrapper({ children }: { children?: React.ReactNode
             </button>
           </div>
 
-          {/* Enable/Disable Toggle */}
+          {/* Engine Toggle */}
           <button
             onClick={() => setEnabled(!enabled)}
             style={{
@@ -97,13 +107,13 @@ export default function YuktAIWrapper({ children }: { children?: React.ReactNode
               cursor: "pointer", fontWeight: "700", fontSize: "16px",
               background: enabled ? "#dcfce7" : "#eff6ff",
               color: enabled ? "#065f46" : "#2563eb",
-              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)", marginBottom: "20px"
+              transition: "all 0.2s ease-in-out", marginBottom: "20px"
             }}
           >
-            {enabled ? "Disable ADA" : "Enable ADA"}
+            {enabled ? "Disable ADA Engine" : "Enable ADA Engine"}
           </button>
 
-          {/* Feature List (Visual Only) */}
+          {/* Configuration List */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "14px", color: "#4a5568", cursor: "pointer" }}>
               <input type="checkbox" checked={enabled} readOnly style={{ width: "16px", height: "16px" }} />
@@ -115,19 +125,31 @@ export default function YuktAIWrapper({ children }: { children?: React.ReactNode
             </label>
           </div>
 
-          {/* Footer Report (Matches your screenshots) */}
+          {/* Technical Report Footer */}
           <div style={{ borderTop: "1px solid #edf2f7", paddingTop: "16px", fontSize: "12px", lineHeight: "1.5", color: "#718096" }}>
             {enabled ? (
               <>
                 <div style={{ color: "#2d3748", fontWeight: "600", marginBottom: "4px" }}>
-                  yuktai-a11y: {stats.fixes} fixes applied across {stats.nodes} nodes.
+                  yuktai-a11y: {stats.fixes} fixes applied.
                 </div>
+                <div>Nodes scanned: {stats.nodes}</div>
                 <div>Render time: <span style={{ color: "#4a5568" }}>{stats.renderTime}ms</span></div>
               </>
             ) : (
-              <div style={{ color: "#a0aec0", fontStyle: "italic" }}>ADA disabled.</div>
+              <div style={{ color: "#a0aec0", fontStyle: "italic" }}>ADA Engine is offline.</div>
             )}
           </div>
+          
+          <button 
+            onClick={() => setOpen(false)}
+            style={{ 
+              width: "100%", marginTop: "20px", padding: "12px", 
+              background: "#1a202c", color: "#fff", borderRadius: "8px", 
+              border: "none", cursor: "pointer", fontWeight: "600" 
+            }}
+          >
+            Done
+          </button>
         </div>
       )}
     </>

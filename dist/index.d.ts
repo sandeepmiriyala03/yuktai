@@ -21,7 +21,7 @@ declare class Runtime {
 }
 
 /**
- * Standard DOM Mount Renderer
+ * Standard DOM Mount Renderer for legacy mounting
  */
 declare function render(element: React.ReactNode, selector: string, enabled?: boolean): void;
 

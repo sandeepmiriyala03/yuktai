@@ -22,6 +22,7 @@ export function applyAccessibility(
 ): React.ReactNode {
   
   // 1. START PERFORMANCE TIMER (Root Level Only)
+  // We check nodes === 0 to ensure we only start the clock at the very top of the tree
   const startTime = report.nodes === 0 ? performance.now() : 0;
 
   if (!React.isValidElement(element)) {
@@ -47,17 +48,20 @@ export function applyAccessibility(
     }
 
     // B. Media & Images
-    if (type === "img" && (props.alt === undefined || props.alt === null)) {
-      props.alt = ""; 
-      props["aria-hidden"] = "true";
-      isModified = true;
+    if (type === "img") {
+      if (props.alt === undefined || props.alt === null) {
+        props.alt = ""; 
+        props["aria-hidden"] = "true";
+        isModified = true;
+      }
     }
+    
     if (["video", "audio", "iframe"].includes(type) && !props.title) {
       props.title = props.name || `${type} content`;
       isModified = true;
     }
 
-    // C. Interactive Elements (Buttons/Links)
+    // C. Interactive Elements (Links)
     if (type === "a") {
       if (props.target === "_blank" && !props.rel) {
         props.rel = "noopener noreferrer";
@@ -65,11 +69,18 @@ export function applyAccessibility(
       }
     }
 
-    // D. Vibe-Fix: Clickable Non-Interactive Elements
+    // D. Vibe-Fix: Clickable Non-Interactive Elements (Divs/Spans)
     if ((type === "div" || type === "span") && props.onClick) {
-      if (!props.role) { props.role = "button"; isModified = true; }
-      if (props.tabIndex === undefined) { props.tabIndex = 0; isModified = true; }
+      if (!props.role) { 
+        props.role = "button"; 
+        isModified = true; 
+      }
+      if (props.tabIndex === undefined) { 
+        props.tabIndex = 0; 
+        isModified = true; 
+      }
       
+      // Inject keyboard support for WCAG compliance
       if (!props.onKeyDown) {
         const originalOnClick = props.onClick;
         props.onKeyDown = (e: React.KeyboardEvent) => {
@@ -83,25 +94,38 @@ export function applyAccessibility(
     }
 
     // E. Structural Landmarks
-    const landmarks: Record<string, string> = { nav: "navigation", header: "banner", footer: "contentinfo", main: "main" };
+    const landmarks: Record<string, string> = { 
+      nav: "navigation", 
+      header: "banner", 
+      footer: "contentinfo", 
+      main: "main" 
+    };
     if (landmarks[type] && !props.role) {
       props.role = landmarks[type];
       isModified = true;
     }
 
-    // F. Data Structures
-    if (["ul", "ol"].includes(type) && !props.role) { props.role = "list"; isModified = true; }
-    if (type === "li" && !props.role) { props.role = "listitem"; isModified = true; }
+    // F. List Data Structures
+    if (["ul", "ol"].includes(type) && !props.role) { 
+      props.role = "list"; 
+      isModified = true; 
+    }
+    if (type === "li" && !props.role) { 
+      props.role = "listitem"; 
+      isModified = true; 
+    }
 
-    // If any change was made to this node, update the report
+    // Update the report if this specific node was remediated
     if (isModified) report.fixes++;
   }
 
-  // 2. RECURSIVE WALK (Process children while maintaining report state)
+  // 2. RECURSIVE WALK
+  // We MUST pass the 'report' object into each child call to aggregate counts
   const children = React.Children.map(props.children, (child: React.ReactNode) =>
     React.isValidElement(child) ? applyAccessibility(child, enabled, report) : child
   );
 
+  // Clone with new props and the processed children
   const finalElement = React.cloneElement(el, props, children);
 
   // 3. FINALIZE PERFORMANCE TIMER (Root Level Only)
@@ -113,7 +137,7 @@ export function applyAccessibility(
 }
 
 /**
- * Standard DOM Mount Renderer
+ * Standard DOM Mount Renderer for legacy mounting
  */
 export function render(
   element: React.ReactNode, 
