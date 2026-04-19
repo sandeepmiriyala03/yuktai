@@ -1,6 +1,6 @@
 {
   "name": "@yuktishaalaa/yuktai",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Privacy-first, offline-first Indic language AI and Web Orchestrator",
   "type": "module",
   "main": "./dist/index.cjs",
