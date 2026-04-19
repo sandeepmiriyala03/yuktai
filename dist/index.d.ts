@@ -1,5 +1,5 @@
-import React from 'react';
 import * as react_jsx_runtime from 'react/jsx-runtime';
+import { ReactNode } from 'react';
 
 interface Plugin {
     name: string;
@@ -20,29 +20,46 @@ declare class Runtime {
     getPlugins(): string[];
 }
 
-/**
- * Metadata for the YuktAI reporting engine
- */
-interface A11yReport {
-    fixes: number;
-    nodes: number;
-    renderTime: number;
+interface A11yConfig {
+    enabled: boolean;
+    highContrast?: boolean;
+    reduceMotion?: boolean;
+    autoFix?: boolean;
+    fontSizeMultiplier?: number;
+    colorBlindMode?: "none" | "deuteranopia" | "protanopia" | "tritanopia" | "achromatopsia";
+    keyboardHints?: boolean;
 }
-/**
- * Universal DOM Accessibility Fixer (A, AA, AAA compliant)
- * Deep-walks the React tree to inject compliance attributes.
- */
-declare function render(element: React.ReactNode, enabled?: boolean, report?: A11yReport): React.ReactNode;
+interface A11yReport {
+    fixed: number;
+    scanned: number;
+    details: {
+        tag: string;
+        fix: string;
+        element: string;
+    }[];
+}
 
 declare function YuktAIWrapper({ children }: {
-    children?: React.ReactNode;
+    children?: ReactNode;
 }): react_jsx_runtime.JSX.Element;
 
 declare global {
     var __yuktai_runtime__: Runtime | undefined;
 }
 declare const YuktAI: {
-    render: typeof render;
+    wcagPlugin: {
+        name: string;
+        version: string;
+        observer: MutationObserver | null;
+        execute(config: A11yConfig): Promise<string>;
+        applyFixes(config: A11yConfig): A11yReport;
+        removeColorBlindSvg(): void;
+        startObserver(config: A11yConfig): void;
+        stopObserver(): void;
+        ensureLiveRegion(): void;
+        removeLiveRegion(): void;
+        announce(msg: string): void;
+    };
     list(): string[];
     use(name: string): Plugin | undefined;
 };

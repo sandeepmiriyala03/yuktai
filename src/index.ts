@@ -4,8 +4,8 @@ import { Runtime } from "./runtime/runtime";
 import { aiPlugin } from "./plugins/ai";
 import { voicePlugin } from "./plugins/voice";
 import { ocrSmartPlugin } from "./plugins/ocr";
-import { wcagPlugin } from './plugins/wcag';
-import { render } from "./core/renderer";
+
+import { wcagPlugin } from "./core/renderer";
 
 export { default as YuktAIWrapper } from "./core/YuktAIWrapper";
 
@@ -30,7 +30,7 @@ const runtime = getRuntime();
 
 // ✅ Public API
 export const YuktAI = {
-  render,
+  wcagPlugin,
   list(): string[] {
     return runtime.getPlugins();
   },
