@@ -1,1 +1,441 @@
-var d=class{plugins=new Map;register(e,i){if(!i||typeof i.execute!="function")throw new Error(`Invalid plugin: ${e}`);this.plugins.set(e,i)}async run(e,i){try{let n=this.plugins.get(e);if(!n)throw new Error(`Plugin not found: ${e}`);return await n.execute(i)}catch(n){throw console.error(`[YuktAI Runtime Error in ${e}]:`,n),n}}getPlugins(){return Array.from(this.plugins.keys())}};var c={name:"ai.text",async execute(t){return`\u{1F916} YuktAI says: ${t}`}};var b={name:"voice.text",async execute(t){return!t||t.trim()===""?"\u{1F3A4} No speech detected":`\u{1F3A4} You said: ${t}`}};import x from"tesseract.js";var l=null,y=null;function v(t){let e=new TextDecoder("utf-8",{fatal:!1}).decode(new Uint8Array(t.slice(0,2e3)));return/[\u0C00-\u0C7F]/.test(e)?"tel":/[\u0900-\u097F]/.test(e)?"hin":/[\u0B80-\u0BFF]/.test(e)?"tam":/[\u4E00-\u9FFF]/.test(e)?"chi_sim":/[\u3040-\u30FF]/.test(e)?"jpn":/[\u0600-\u06FF]/.test(e)?"ara":/[\u0400-\u04FF]/.test(e)?"rus":"eng"}async function E(t){return l&&y===t||(l&&(await l.terminate(),l=null),l=await x.createWorker({langPath:"/tessdata",logger:()=>{}}),await l.loadLanguage(t),await l.initialize(t),y=t),l}var f={name:"image.ocr.smart",async execute(t){try{if(!t?.file)return"\u274C No file provided";let e=t.file instanceof Blob?t.file:new Blob([t.file],{type:t.type??"image/png"}),i=t.lang||v(await e.arrayBuffer())||"eng",n=await E(i),{data:s}=await n.recognize(e),o=s.text?.trim();return o?{language:i,confidence:Math.round(s.confidence??0),text:o}:"\u26A0\uFE0F No text detected"}catch(e){return console.error("[ocrSmartPlugin]",e),"\u274C OCR failed"}}};var g={name:"ui.a11y.pro",version:"1.0.0",observer:null,drawerObserver:null,async execute(t){if(!t?.enabled)return this.stopObserver(),this.stopDrawerObserver(),"yuktai-a11y: disabled";if(typeof document>"u")return{fixed:0,scanned:0,details:[]};let e=this.applyFixes(t);return requestAnimationFrame(()=>{this.patchInteractivePatterns(),this.watchDialogs()}),t.autoFix&&this.startObserver(t),this.ensureLiveRegion(),this.announce(`Accessibility active. ${e.fixed} fixes applied.`),e},applyFixes(t){let e={fixed:0,scanned:0,details:[]};if(typeof document>"u")return e;let n=(t.root||document).querySelectorAll("a, button, input, select, textarea, img, table, [onclick], [tabindex], [contenteditable], h1, h2, h3, h4, h5, h6, nav, main, header, footer, aside, section");e.scanned=n.length;let s=0;if(n.forEach(o=>{let r=o,a=r.tagName.toLowerCase();if(/^h[1-6]$/.test(a)){let u=parseInt(a[1]);u>s+1&&s!==0&&(r.setAttribute("aria-level",String(s+1)),e.fixed++,e.details.push({tag:a,fix:`aria-level="${s+1}" (skipped heading corrected)`})),s=u}if(a==="nav"&&!r.getAttribute("aria-label")&&document.querySelectorAll("nav").length>1&&!r.getAttribute("aria-labelledby")&&(r.setAttribute("aria-label","Navigation"),e.fixed++,e.details.push({tag:a,fix:'aria-label="Navigation"'})),(a==="a"||a==="button")&&!r.innerText.trim()&&!r.getAttribute("aria-label")&&!r.getAttribute("aria-labelledby")){let u=r.getAttribute("title")||r.getAttribute("data-label")||r.querySelector("img")?.getAttribute("alt")||"Interactive element";r.setAttribute("aria-label",u),e.fixed++,e.details.push({tag:a,fix:`aria-label="${u}"`})}let h=r.hasAttribute("onclick")||typeof window<"u"&&window.getComputedStyle(r).cursor==="pointer",A=["button","a","input","select","textarea"].includes(a);if(h&&!A&&(r.getAttribute("role")||(r.setAttribute("role","button"),e.fixed++,e.details.push({tag:a,fix:'role="button"'})),r.tabIndex<0&&(r.tabIndex=0,e.fixed++,e.details.push({tag:a,fix:'tabindex="0"'})),r._yuktKeyBound||(r.addEventListener("keydown",u=>{(u.key==="Enter"||u.key===" ")&&(u.preventDefault(),r.click())}),r._yuktKeyBound=!0)),["input","select","textarea"].includes(a)){if(r.type==="hidden")return;if(!r.getAttribute("aria-label")&&!r.getAttribute("aria-labelledby")){let m=r.getAttribute("id");if(!(m?!!document.querySelector(`label[for="${m}"]`):!1)){let p=r.getAttribute("placeholder")||r.getAttribute("name")||r.getAttribute("data-label")||a;r.setAttribute("aria-label",p),e.fixed++,e.details.push({tag:a,fix:`aria-label="${p}"`})}}r.hasAttribute("required")&&!r.getAttribute("aria-required")&&(r.setAttribute("aria-required","true"),e.fixed++,e.details.push({tag:a,fix:'aria-required="true"'})),r.hasAttribute("disabled")&&!r.getAttribute("aria-disabled")&&(r.setAttribute("aria-disabled","true"),e.fixed++,e.details.push({tag:a,fix:'aria-disabled="true"'}))}a==="img"&&(r.hasAttribute("alt")||(r.setAttribute("alt",""),r.setAttribute("aria-hidden","true"),e.fixed++,e.details.push({tag:a,fix:'alt="" aria-hidden="true" (decorative)'}))),a==="table"&&(!o.querySelector("th")&&!r.getAttribute("role")&&(r.setAttribute("role","grid"),e.fixed++,e.details.push({tag:a,fix:'role="grid" (no th found)'})),!o.querySelector("caption")&&!r.getAttribute("aria-label")&&(r.setAttribute("aria-label","Data table"),e.fixed++,e.details.push({tag:a,fix:'aria-label="Data table"'})))}),t.highContrast&&(document.documentElement.style.filter="contrast(1.15) brightness(1.05)"),t.reduceMotion&&(document.documentElement.style.scrollBehavior="auto",!document.getElementById("yukt-reduce-motion"))){let o=document.createElement("style");o.id="yukt-reduce-motion",o.textContent="*, *::before, *::after { transition: none !important; animation: none !important; }",document.head.appendChild(o)}return e},patchInteractivePatterns(){if(typeof document>"u")return;let t=document.querySelectorAll("nav");if(t.length>1&&t.forEach((e,i)=>{!e.getAttribute("aria-label")&&!e.getAttribute("aria-labelledby")&&e.setAttribute("aria-label",i===0?"Main navigation":`Navigation ${i+1}`)}),document.querySelectorAll("[aria-haspopup], [data-toggle='dropdown']").forEach(e=>{e.getAttribute("aria-expanded")||e.setAttribute("aria-expanded","false")}),document.querySelectorAll("div, span").forEach(e=>{if(typeof window>"u")return;let i=window.getComputedStyle(e).cursor==="pointer",n=e.querySelector("[role='menu'], ul, ol")!==null||e.nextElementSibling?.matches("ul, ol, [role='menu'], [role='listbox']");i&&n&&(e.getAttribute("role")||e.setAttribute("role","button"),e.getAttribute("aria-haspopup")||e.setAttribute("aria-haspopup","true"),e.getAttribute("aria-expanded")||e.setAttribute("aria-expanded","false"),e.getAttribute("tabindex")||e.setAttribute("tabindex","0"),e._dropKeyBound||(e.addEventListener("keydown",s=>{(s.key==="Enter"||s.key===" ")&&(s.preventDefault(),e.click()),s.key==="Escape"&&e.blur()}),e._dropKeyBound=!0))}),document.querySelectorAll("[role='dialog'], [role='alertdialog'], [aria-modal='true'], .modal, .drawer, .sidebar, .overlay, .panel").forEach(e=>{if(e.getAttribute("role")||e.setAttribute("role","dialog"),e.getAttribute("aria-modal")||e.setAttribute("aria-modal","true"),!e.getAttribute("aria-label")&&!e.getAttribute("aria-labelledby")){let i=e.querySelector("h1, h2, h3, h4");i?(i.getAttribute("id")||i.setAttribute("id",`yukt-dlg-title-${Date.now()}`),e.setAttribute("aria-labelledby",i.getAttribute("id"))):e.setAttribute("aria-label","Dialog")}}),document.querySelectorAll("[role='tab']").forEach(e=>{e.getAttribute("aria-selected")||e.setAttribute("aria-selected","false")}),document.querySelectorAll("[aria-controls], [data-toggle='collapse']").forEach(e=>{e.tagName.toLowerCase()==="button"&&(e.getAttribute("aria-expanded")||e.setAttribute("aria-expanded","false"))}),document.querySelectorAll("button, [role='button']").forEach(e=>{let i=e.innerText.trim().length>0,n=e.querySelector("svg")!==null,s=e.querySelector("img")!==null;if(!i&&(n||s)){if(!e.getAttribute("aria-label")&&!e.getAttribute("aria-labelledby")){let o=e.getAttribute("title")||e.getAttribute("data-label")||e.getAttribute("name")||"Button";e.setAttribute("aria-label",o)}e.querySelectorAll("svg").forEach(o=>{o.getAttribute("aria-hidden")||o.setAttribute("aria-hidden","true")})}}),document.querySelectorAll("a[target='_blank']").forEach(e=>{if(!e.getAttribute("aria-label")&&!e.getAttribute("aria-describedby")){let i=e.getAttribute("aria-label")||e.innerText.trim();i&&e.setAttribute("aria-label",`${i} (opens in new tab)`)}}),!document.getElementById("yukt-skip-link")){let e=document.querySelector("main, [role='main'], #main, #content");if(e){e.getAttribute("id")||e.setAttribute("id","yukt-main-content");let i=document.createElement("a");i.id="yukt-skip-link",i.href=`#${e.getAttribute("id")}`,i.textContent="Skip to main content",i.style.cssText=["position:fixed","top:-999px","left:8px","z-index:99999","padding:8px 16px","background:#0d9488","color:#fff","border-radius:4px","font-size:14px","text-decoration:none","transition:top 0.2s"].join(";"),i.addEventListener("focus",()=>{i.style.top="8px"}),i.addEventListener("blur",()=>{i.style.top="-999px"}),document.body.insertBefore(i,document.body.firstChild)}}},watchDialogs(){if(typeof document>"u"||this.drawerObserver)return;let t=["open","is-open","active","visible","show","expanded"];this.drawerObserver=new MutationObserver(e=>{e.forEach(i=>{let n=i.target;if(n.getAttribute("role")==="dialog"||n.getAttribute("role")==="alertdialog"||n.getAttribute("aria-modal")==="true"){if(i.type==="attributes"&&i.attributeName==="class"){let o=t.some(a=>n.classList.contains(a));n.setAttribute("aria-hidden",String(!o));let r=n.getAttribute("id");if(r){let a=document.querySelector(`[aria-controls="${r}"]`);a&&a.setAttribute("aria-expanded",String(o))}if(o){let a=n.querySelector("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex='0']");setTimeout(()=>a?.focus(),50)}}if(i.type==="attributes"&&i.attributeName==="aria-hidden"){let o=n.getAttribute("aria-hidden")==="true",r=n.getAttribute("id");if(r){let a=document.querySelector(`[aria-controls="${r}"]`);a&&a.setAttribute("aria-expanded",String(!o))}}}})}),this.drawerObserver.observe(document.body,{attributes:!0,attributeFilter:["class","aria-hidden","style"],subtree:!0})},startObserver(t){this.observer||typeof document>"u"||(this.observer=new MutationObserver(e=>{e.forEach(i=>{i.addedNodes.forEach(n=>{n instanceof HTMLElement&&(this.applyFixes({...t,root:n}),requestAnimationFrame(()=>this.patchInteractivePatterns()))})})}),this.observer.observe(document.body,{childList:!0,subtree:!0}))},stopObserver(){this.observer&&(this.observer.disconnect(),this.observer=null)},stopDrawerObserver(){this.drawerObserver&&(this.drawerObserver.disconnect(),this.drawerObserver=null)},ensureLiveRegion(){if(typeof document>"u"||document.getElementById("yukt-sr-announcer"))return;let t=document.createElement("div");t.id="yukt-sr-announcer",t.setAttribute("aria-live","polite"),t.setAttribute("aria-atomic","true"),t.style.cssText="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;",document.body.appendChild(t)},announce(t){if(typeof document>"u")return;let e=document.getElementById("yukt-sr-announcer");e&&(e.textContent="",setTimeout(()=>{e.textContent=t},50))}};function w(){if(!globalThis.__yuktai_runtime__){let t=new d;t.register(c.name,c),t.register(b.name,b),t.register(f.name,f),t.register(g.name,g),globalThis.__yuktai_runtime__=t}return globalThis.__yuktai_runtime__}var k=w(),S={list(){return k.getPlugins()}},$=S;export{$ as default};
+// src/runtime/runtime.ts
+var Runtime = class {
+  plugins = /* @__PURE__ */ new Map();
+  /**
+   * 🔹 Register plugin safely
+   * Ensures the plugin exists and has a valid execute function.
+   */
+  register(name, plugin) {
+    if (!plugin || typeof plugin.execute !== "function") {
+      throw new Error(`Invalid plugin: ${name}`);
+    }
+    this.plugins.set(name, plugin);
+  }
+  /**
+   * 🔹 Run task
+   * Simplified execution without lifecycle event overhead.
+   */
+  async run(task, input) {
+    try {
+      const plugin = this.plugins.get(task);
+      if (!plugin) {
+        throw new Error(`Plugin not found: ${task}`);
+      }
+      return await plugin.execute(input);
+    } catch (err) {
+      console.error(`[YuktAI Runtime Error in ${task}]:`, err);
+      throw err;
+    }
+  }
+  /**
+   * 🔹 Safe plugin listing
+   */
+  getPlugins() {
+    return Array.from(this.plugins.keys());
+  }
+};
+
+// src/plugins/ai.ts
+var aiPlugin = {
+  name: "ai.text",
+  async execute(input) {
+    return `\u{1F916} YuktAI says: ${input}`;
+  }
+};
+
+// src/plugins/voice.ts
+var voicePlugin = {
+  name: "voice.text",
+  async execute(input) {
+    if (!input || input.trim() === "") {
+      return "\u{1F3A4} No speech detected";
+    }
+    return `\u{1F3A4} You said: ${input}`;
+  }
+};
+
+// src/plugins/ocr.ts
+import Tesseract from "tesseract.js";
+var worker = null;
+var currentLang = null;
+function detectLang(buffer) {
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(
+    new Uint8Array(buffer.slice(0, 2e3))
+  );
+  if (/[\u0C00-\u0C7F]/.test(text)) return "tel";
+  if (/[\u0900-\u097F]/.test(text)) return "hin";
+  if (/[\u0B80-\u0BFF]/.test(text)) return "tam";
+  if (/[\u4E00-\u9FFF]/.test(text)) return "chi_sim";
+  if (/[\u3040-\u30FF]/.test(text)) return "jpn";
+  if (/[\u0600-\u06FF]/.test(text)) return "ara";
+  if (/[\u0400-\u04FF]/.test(text)) return "rus";
+  return "eng";
+}
+async function getWorker(lang) {
+  if (worker && currentLang === lang) return worker;
+  if (worker) {
+    await worker.terminate();
+    worker = null;
+  }
+  worker = await Tesseract.createWorker({
+    langPath: "/tessdata",
+    // 🔥 BEST (self-host)
+    // OR use:
+    // langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/",
+    logger: () => {
+    }
+  });
+  await worker.loadLanguage(lang);
+  await worker.initialize(lang);
+  currentLang = lang;
+  return worker;
+}
+var ocrSmartPlugin = {
+  name: "image.ocr.smart",
+  async execute(input) {
+    try {
+      if (!input?.file) return "\u274C No file provided";
+      const blob = input.file instanceof Blob ? input.file : new Blob([input.file], {
+        type: input.type ?? "image/png"
+      });
+      const lang = input.lang || detectLang(await blob.arrayBuffer()) || "eng";
+      const workerInstance = await getWorker(lang);
+      const { data } = await workerInstance.recognize(blob);
+      const text = data.text?.trim();
+      if (!text) return "\u26A0\uFE0F No text detected";
+      return {
+        language: lang,
+        confidence: Math.round(data.confidence ?? 0),
+        text
+      };
+    } catch (err) {
+      console.error("[ocrSmartPlugin]", err);
+      return "\u274C OCR failed";
+    }
+  }
+};
+
+// src/plugins/wcag.ts
+var wcagPlugin = {
+  name: "ui.a11y.pro",
+  version: "1.0.1",
+  observer: null,
+  /**
+   * Main entry point for the accessibility plugin.
+   * @param config Configuration options
+   * @returns Promise resolving to a report or status message
+   */
+  async execute(config) {
+    if (!config?.enabled) {
+      this.stopObserver();
+      return "yuktai-a11y: disabled";
+    }
+    try {
+      const report = this.applyFixes(config);
+      if (config.autoFix) {
+        this.startObserver(config);
+      }
+      this.ensureLiveRegion();
+      this.announce(`Accessibility active. ${report.fixed} fixes applied.`);
+      if (config.validate) {
+        const validation = this.validatePage();
+        return { ...report, validation };
+      }
+      return report;
+    } catch (error) {
+      console.error("WCAG Plugin execution error:", error);
+      return { fixed: 0, scanned: 0, errors: [error.message] };
+    }
+  },
+  /**
+   * Applies accessibility fixes to DOM elements.
+   * IMPORTANT: Never modifies 'id' attributes — developer owns those.
+   * @param config Configuration options
+   * @returns Report of fixes applied
+   */
+  applyFixes(config) {
+    const report = { fixed: 0, scanned: 0, errors: [] };
+    if (typeof document === "undefined") return report;
+    const root = config.root || document;
+    const skipFixes = config.skipFixes || [];
+    try {
+      const elements = root.querySelectorAll(
+        "a,button,input,select,textarea,img,table,[onclick],[tabindex],h1,h2,h3,h4,h5,h6,iframe,video,audio,[role],[aria-label],[aria-labelledby]"
+      );
+      report.scanned = elements.length;
+      let lastHeadingLevel = 0;
+      elements.forEach((el) => {
+        try {
+          const h = el;
+          const tag = h.tagName.toLowerCase();
+          if (!skipFixes.includes("headings") && /^h[1-6]$/.test(tag)) {
+            const level = parseInt(tag[1]);
+            if (level > lastHeadingLevel + 1 && lastHeadingLevel !== 0) {
+              h.setAttribute("aria-level", String(lastHeadingLevel + 1));
+              report.fixed++;
+            }
+            lastHeadingLevel = level;
+          }
+          if (!skipFixes.includes("buttons") && (tag === "a" || tag === "button") && !h.innerText.trim()) {
+            if (!h.getAttribute("aria-label")) {
+              const label = h.getAttribute("title") || h.getAttribute("aria-label") || "Interactive element";
+              h.setAttribute("aria-label", label);
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("clickables")) {
+            const isClickable = h.hasAttribute("onclick") || typeof window !== "undefined" && window.getComputedStyle(h).cursor === "pointer";
+            if (isClickable && !["button", "a", "input", "select", "textarea"].includes(tag)) {
+              if (!h.getAttribute("role")) {
+                h.setAttribute("role", "button");
+                report.fixed++;
+              }
+              if (h.tabIndex < 0) {
+                h.tabIndex = 0;
+                report.fixed++;
+              }
+              if (!h._yuktKeyBound) {
+                h.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    h.click();
+                  }
+                });
+                h._yuktKeyBound = true;
+              }
+            }
+          }
+          if (!skipFixes.includes("forms") && ["input", "select", "textarea"].includes(tag)) {
+            if (!h.getAttribute("aria-label") && !h.getAttribute("aria-labelledby")) {
+              const label = h.getAttribute("placeholder") || h.getAttribute("name") || h.getAttribute("title") || tag;
+              h.setAttribute("aria-label", label);
+              report.fixed++;
+            }
+            if (h.hasAttribute("required") && !h.getAttribute("aria-required")) {
+              h.setAttribute("aria-required", "true");
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("images") && tag === "img" && !h.hasAttribute("alt")) {
+            h.setAttribute("alt", "");
+            h.setAttribute("aria-hidden", "true");
+            report.fixed++;
+          }
+          if (!skipFixes.includes("tables") && tag === "table" && !el.querySelector("th")) {
+            if (!h.getAttribute("role")) {
+              h.setAttribute("role", "grid");
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("media") && ["video", "audio"].includes(tag)) {
+            if (!h.hasAttribute("controls")) {
+              h.setAttribute("controls", "true");
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("iframes") && tag === "iframe" && !h.getAttribute("title")) {
+            h.setAttribute("title", "Embedded content");
+            report.fixed++;
+          }
+        } catch (elementError) {
+          report.errors.push(`Error fixing element ${el.tagName}: ${elementError.message}`);
+        }
+      });
+      if (config.highContrast) {
+        document.documentElement.style.filter = "contrast(1.15) brightness(1.05)";
+      }
+      if (config.reduceMotion) {
+        document.documentElement.style.scrollBehavior = "auto";
+        if (!document.getElementById("yukt-reduce-motion")) {
+          const style = document.createElement("style");
+          style.id = "yukt-reduce-motion";
+          style.textContent = `*, *::before, *::after { transition: none !important; animation: none !important; }`;
+          document.head.appendChild(style);
+        }
+      }
+    } catch (error) {
+      report.errors.push(`General error in applyFixes: ${error.message}`);
+    }
+    return report;
+  },
+  /**
+   * Starts observing DOM mutations to apply fixes to new elements.
+   * @param config Configuration options
+   */
+  startObserver(config) {
+    if (this.observer || typeof document === "undefined") return;
+    this.observer = new MutationObserver((mutations) => {
+      clearTimeout(this._mutationTimer);
+      this._mutationTimer = setTimeout(() => {
+        mutations.forEach((m) => {
+          m.addedNodes.forEach((node) => {
+            if (node instanceof HTMLElement) {
+              this.applyFixes({ ...config, root: node });
+            }
+          });
+        });
+      }, 100);
+    });
+    this.observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: false
+      // Only care about new elements
+    });
+  },
+  /**
+   * Stops the DOM mutation observer.
+   */
+  stopObserver() {
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
+    if (this._mutationTimer) {
+      clearTimeout(this._mutationTimer);
+    }
+  },
+  /**
+   * Cleans up all resources and resets the plugin state.
+   */
+  cleanup() {
+    this.stopObserver();
+    this.removeLiveRegion();
+    const style = document.getElementById("yukt-reduce-motion");
+    if (style) style.remove();
+    if (typeof document !== "undefined") {
+      document.documentElement.style.filter = "";
+      document.documentElement.style.scrollBehavior = "";
+    }
+  },
+  /**
+   * Ensures a screen reader live region exists for announcements.
+   */
+  ensureLiveRegion() {
+    if (typeof document === "undefined") return;
+    if (document.getElementById("yukt-sr-announcer")) return;
+    const node = document.createElement("div");
+    node.id = "yukt-sr-announcer";
+    node.setAttribute("aria-live", "polite");
+    node.setAttribute("aria-atomic", "true");
+    node.style.cssText = "position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;";
+    document.body.appendChild(node);
+  },
+  /**
+   * Removes the screen reader live region.
+   */
+  removeLiveRegion() {
+    if (typeof document === "undefined") return;
+    const node = document.getElementById("yukt-sr-announcer");
+    if (node) node.remove();
+  },
+  /**
+   * Announces a message to screen readers.
+   * @param msg Message to announce
+   */
+  announce(msg) {
+    if (typeof document === "undefined") return;
+    const node = document.getElementById("yukt-sr-announcer");
+    if (!node) return;
+    node.textContent = "";
+    setTimeout(() => {
+      node.textContent = msg;
+    }, 50);
+  },
+  /**
+   * Checks if two colors have sufficient contrast ratio.
+   * @param fg Foreground color (hex, rgb, or color name)
+   * @param bg Background color (hex, rgb, or color name)
+   * @param ratio Minimum contrast ratio (default 4.5 for normal text)
+   * @returns True if contrast is sufficient
+   */
+  checkContrast(fg, bg, ratio = 4.5) {
+    try {
+      const getLuminance = (color) => {
+        const temp = document.createElement("div");
+        temp.style.color = color;
+        temp.style.backgroundColor = bg;
+        document.body.appendChild(temp);
+        const fgRgb = window.getComputedStyle(temp).color;
+        const bgRgb = window.getComputedStyle(temp).backgroundColor;
+        temp.remove();
+        const fgMatch = fgRgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        const bgMatch = bgRgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (!fgMatch || !bgMatch) return 1;
+        const fgL = this.rgbToLuminance(parseInt(fgMatch[1]), parseInt(fgMatch[2]), parseInt(fgMatch[3]));
+        const bgL = this.rgbToLuminance(parseInt(bgMatch[1]), parseInt(bgMatch[2]), parseInt(bgMatch[3]));
+        const lighter = Math.max(fgL, bgL);
+        const darker = Math.min(fgL, bgL);
+        return (lighter + 0.05) / (darker + 0.05);
+      };
+      return getLuminance(fg) >= ratio;
+    } catch (error) {
+      console.warn("Contrast check failed:", error);
+      return true;
+    }
+  },
+  /**
+   * Validates the current page for accessibility issues.
+   * @returns Detailed report of accessibility status
+   */
+  validatePage() {
+    const issues = [];
+    const recommendations = [];
+    if (typeof document === "undefined") {
+      return { score: 0, issues: ["Server-side rendering detected"], recommendations: [] };
+    }
+    if (!document.documentElement.getAttribute("lang")) {
+      issues.push("Missing lang attribute on html element");
+      recommendations.push('Add lang attribute to <html> element (e.g., <html lang="en">)');
+    }
+    if (!document.title) {
+      issues.push("Missing page title");
+      recommendations.push("Add a descriptive <title> element");
+    }
+    const focusableElements = document.querySelectorAll('a,button,input,select,textarea,[tabindex]:not([tabindex="-1"])');
+    if (focusableElements.length === 0) {
+      issues.push("No keyboard-focusable elements found");
+      recommendations.push("Ensure interactive elements are keyboard accessible");
+    }
+    const imagesWithoutAlt = document.querySelectorAll("img:not([alt])");
+    if (imagesWithoutAlt.length > 0) {
+      issues.push(`${imagesWithoutAlt.length} images missing alt text`);
+      recommendations.push("Add descriptive alt text to all images");
+    }
+    const headings = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6"));
+    let lastLevel = 0;
+    headings.forEach((h, index) => {
+      const level = parseInt(h.tagName[1]);
+      if (index > 0 && level > lastLevel + 1) {
+        issues.push(`Skipped heading level: ${h.tagName} after h${lastLevel}`);
+        recommendations.push("Ensure heading hierarchy is sequential");
+      }
+      lastLevel = level;
+    });
+    const score = Math.max(0, 100 - issues.length * 10);
+    return { score, issues, recommendations };
+  }
+};
+
+// src/index.ts
+function getRuntime() {
+  if (!globalThis.__yuktai_runtime__) {
+    const runtime2 = new Runtime();
+    runtime2.register(aiPlugin.name, aiPlugin);
+    runtime2.register(voicePlugin.name, voicePlugin);
+    runtime2.register(ocrSmartPlugin.name, ocrSmartPlugin);
+    runtime2.register(wcagPlugin.name, wcagPlugin);
+    globalThis.__yuktai_runtime__ = runtime2;
+  }
+  return globalThis.__yuktai_runtime__;
+}
+var runtime = getRuntime();
+var YuktAI = {
+  list() {
+    return runtime.getPlugins();
+  }
+};
+var index_default = YuktAI;
+export {
+  index_default as default
+};
