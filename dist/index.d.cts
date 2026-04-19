@@ -21,10 +21,9 @@ declare class Runtime {
 }
 
 /**
- * Layer 2: Global DOM Renderer
- * Renders React into the DOM with auto-fixes applied.
+ * Standard DOM Mount Renderer
  */
-declare function render(element: React.ReactNode, selector: string): void;
+declare function render(element: React.ReactNode, selector: string, enabled?: boolean): void;
 
 interface YuktAIWrapperProps {
     children?: React.ReactNode;

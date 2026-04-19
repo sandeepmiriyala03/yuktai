@@ -20,6 +20,7 @@ export interface A11yConfig {
   skipFixes?: string[];
   /** Include page validation in the report */
   validate?: boolean;
+  level?: "A" | "AA" | "AAA";
 }
 
 /**

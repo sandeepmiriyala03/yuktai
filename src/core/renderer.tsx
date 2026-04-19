@@ -1,78 +1,145 @@
+"use client";
 import React, { ReactElement } from "react";
 import ReactDOM from "react-dom/client";
 
 /**
- * Layer 1: React Virtual DOM Fixer
- * Recursively injects ARIA attributes into React elements before they hit the DOM.
+ * Universal DOM Accessibility Fixer
+ * Covers Forms, Media, Structure, Navigation, Tables, and Interactive elements.
  */
-export function applyAccessibility(element: React.ReactNode): React.ReactNode {
-  // 1. Type Guard: If not a valid React element (string, null, etc.), return as-is
-  if (!React.isValidElement(element)) {
+export function applyAccessibility(
+  element: React.ReactNode, 
+  enabled: boolean = true
+): React.ReactNode {
+  
+  if (!enabled || !React.isValidElement(element)) {
     return element;
   }
 
-  // 2. Cast to ReactElement to safely access props and avoid spread errors
   const el = element as ReactElement<any>;
   const props = { ...el.props };
+  const type = el.type as any;
 
-  // 🔹 Handle Form Elements
-  if (el.type === "input" || el.type === "textarea" || el.type === "select") {
+  // 1. FORMS & INPUTS
+  if (["input", "textarea", "select"].includes(type)) {
     if (!props["aria-label"] && !props["aria-labelledby"]) {
-      props["aria-label"] = props.placeholder || props.name || `${el.type} field`;
+      // Logic: Use placeholder or name if label is missing
+      props["aria-label"] = props.placeholder || props.name || `${type} input`;
     }
   }
 
-  // 🔹 Handle Buttons
-  if (el.type === "button") {
+  // 2. INTERACTIVE (Buttons & Links)
+  if (type === "button") {
     if (!props["aria-label"] && !props.children) {
-      props["aria-label"] = "Interactive button";
+      props["aria-label"] = "action button";
     }
   }
 
-  // 🔹 Handle Images
-  if (el.type === "img") {
-    if (!props.alt) {
+  if (type === "a") {
+    if (props.href && !props["aria-label"] && !props.children) {
+      props["aria-label"] = `Link to ${props.href}`;
+    }
+    // Security fix for external links
+    if (props.target === "_blank" && !props.rel) {
+      props.rel = "noopener noreferrer";
+    }
+  }
+
+  // 3. MEDIA (Images, Video, Audio, Iframe)
+  if (type === "img") {
+    if (props.alt === undefined || props.alt === null) {
       props.alt = ""; 
       props["aria-hidden"] = "true";
     }
   }
 
-  // 🔹 Handle Clickable Non-Interactive Elements (The "Vibe" fix)
-  if ((el.type === "div" || el.type === "span") && props.onClick) {
-    props.role = "button";
-    props.tabIndex = 0;
-    const originalOnClick = props.onClick;
-    props.onKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        originalOnClick(e);
-      }
-    };
+  if (["video", "audio", "iframe"].includes(type)) {
+    if (!props.title) {
+      props.title = props.name || `${type} content`;
+    }
   }
 
-  // 3. Recursive walk through the tree with explicit child type
+  // 4. LANDMARKS & STRUCTURE
+  const landmarks: Record<string, string> = {
+    nav: "navigation",
+    header: "banner",
+    footer: "contentinfo",
+    main: "main",
+    aside: "complementary",
+    section: "region"
+  };
+
+  if (landmarks[type]) {
+    if (!props.role) props.role = landmarks[type];
+    if (type === "section" && !props["aria-label"] && props.title) {
+      props["aria-label"] = props.title;
+    }
+  }
+
+  // 5. DATA STRUCTURES (Tables & Lists)
+  if (type === "table") {
+    if (!props.role) props.role = "table";
+    if (!props["aria-label"]) props["aria-label"] = "Data representation";
+  }
+
+  if (["ul", "ol"].includes(type) && !props.role) {
+    props.role = "list";
+  }
+
+  if (type === "li" && !props.role) {
+    props.role = "listitem";
+  }
+
+  // 6. CLICKABLE NON-INTERACTIVE (The "Vibe" Fix)
+  // Ensures divs/spans used as buttons are focusable and keyboard-friendly
+  if ((type === "div" || type === "span" || type === "section") && props.onClick) {
+    if (!props.role) props.role = "button";
+    if (props.tabIndex === undefined) props.tabIndex = 0;
+    
+    if (!props.onKeyDown) {
+      const originalOnClick = props.onClick;
+      props.onKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          originalOnClick(e);
+        }
+      };
+    }
+  }
+
+  // 7. TYPOGRAPHY & HEADINGS
+  if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(type)) {
+    if (!props.id && typeof props.children === "string") {
+      props.id = props.children.toLowerCase().trim().replace(/\s+/g, "-");
+    }
+  }
+
+  // 8. DIALOGS & MODALS
+  if (type === "dialog") {
+    if (!props["aria-modal"]) props["aria-modal"] = "true";
+  }
+
+  // 9. RECURSIVE DEEP-WALK
   const children = React.Children.map(props.children, (child: React.ReactNode) =>
-    React.isValidElement(child) ? applyAccessibility(child) : child
+    React.isValidElement(child) ? applyAccessibility(child, enabled) : child
   );
 
   return React.cloneElement(el, props, children);
 }
 
 /**
- * Layer 2: Global DOM Renderer
- * Renders React into the DOM with auto-fixes applied.
+ * Standard DOM Mount Renderer
  */
-export function render(element: React.ReactNode, selector: string): void {
+export function render(
+  element: React.ReactNode, 
+  selector: string, 
+  enabled: boolean = true
+): void {
   const container = document.querySelector(selector);
-  if (!container) {
-    throw new Error(`[YuktAI] Target container not found: ${selector}`);
-  }
+  if (!container) return;
 
-  // Apply React-level fixes
-  const accessibleElement = applyAccessibility(element);
-
-  // Initialize React 18 Root
+  const accessibleElement = applyAccessibility(element, enabled);
   const root = ReactDOM.createRoot(container as HTMLElement);
+  
   root.render(
     <React.StrictMode>
       {accessibleElement}
