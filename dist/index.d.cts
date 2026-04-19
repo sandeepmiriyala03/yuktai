@@ -20,9 +20,6 @@ declare class Runtime {
     getPlugins(): string[];
 }
 
-/**
- * Standard DOM Mount Renderer for legacy mounting
- */
 declare function render(element: React.ReactNode, selector: string, enabled?: boolean): void;
 
 declare function YuktAIWrapper({ children }: {
