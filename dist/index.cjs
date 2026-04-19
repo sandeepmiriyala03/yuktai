@@ -1,1 +1,708 @@
-"use strict";"use client";var B=Object.create;var y=Object.defineProperty;var N=Object.getOwnPropertyDescriptor;var $=Object.getOwnPropertyNames;var O=Object.getPrototypeOf,q=Object.prototype.hasOwnProperty;var D=(e,t)=>{for(var i in t)y(e,i,{get:t[i],enumerable:!0})},T=(e,t,i,r)=>{if(t&&typeof t=="object"||typeof t=="function")for(let u of $(t))!q.call(e,u)&&u!==i&&y(e,u,{get:()=>t[u],enumerable:!(r=N(t,u))||r.enumerable});return e};var A=(e,t,i)=>(i=e!=null?B(O(e)):{},T(t||!e||!e.__esModule?y(i,"default",{value:e,enumerable:!0}):i,e)),z=e=>T(y({},"__esModule",{value:!0}),e);var G={};D(G,{YuktAI:()=>P,YuktAIWrapper:()=>C,default:()=>K});module.exports=z(G);var h=class{plugins=new Map;register(t,i){if(!i||typeof i.execute!="function")throw new Error(`Invalid plugin: ${t}`);this.plugins.set(t,i)}use(t){return this.plugins.get(t)}async run(t,i){try{let r=this.use(t);if(!r)throw new Error(`Plugin not found: ${t}`);return await r.execute(i)}catch(r){throw console.error(`[YuktAI Runtime Error in ${t}]:`,r),r}}getPlugins(){return Array.from(this.plugins.keys())}};var k={name:"ai.text",async execute(e){return`\u{1F916} YuktAI says: ${e}`}};var E={name:"voice.text",async execute(e){return!e||e.trim()===""?"\u{1F3A4} No speech detected":`\u{1F3A4} You said: ${e}`}};var S=A(require("tesseract.js"),1),g=null,I=null;function W(e){let t=new TextDecoder("utf-8",{fatal:!1}).decode(new Uint8Array(e.slice(0,2e3)));return/[\u0C00-\u0C7F]/.test(t)?"tel":/[\u0900-\u097F]/.test(t)?"hin":/[\u0B80-\u0BFF]/.test(t)?"tam":/[\u4E00-\u9FFF]/.test(t)?"chi_sim":/[\u3040-\u30FF]/.test(t)?"jpn":/[\u0600-\u06FF]/.test(t)?"ara":/[\u0400-\u04FF]/.test(t)?"rus":"eng"}async function H(e){return g&&I===e||(g&&(await g.terminate(),g=null),g=await S.default.createWorker({langPath:"/tessdata",logger:()=>{}}),await g.loadLanguage(e),await g.initialize(e),I=e),g}var R={name:"image.ocr.smart",async execute(e){try{if(!e?.file)return"\u274C No file provided";let t=e.file instanceof Blob?e.file:new Blob([e.file],{type:e.type??"image/png"}),i=e.lang||W(await t.arrayBuffer())||"eng",r=await H(i),{data:u}=await r.recognize(t),s=u.text?.trim();return s?{language:i,confidence:Math.round(u.confidence??0),text:s}:"\u26A0\uFE0F No text detected"}catch(t){return console.error("[ocrSmartPlugin]",t),"\u274C OCR failed"}}};var w={name:"ui.a11y.pro",version:"1.0.1",observer:null,async execute(e){if(!e?.enabled)return this.stopObserver(),"yuktai-a11y: disabled";try{let t=this.applyFixes(e);if(e.autoFix&&this.startObserver(e),this.ensureLiveRegion(),this.announce(`Accessibility active. ${t.fixed} fixes applied.`),e.validate){let i=this.validatePage();return{...t,validation:i}}return t}catch(t){return console.error("WCAG Plugin execution error:",t),{fixed:0,scanned:0,errors:[t.message]}}},applyFixes(e){let t={fixed:0,scanned:0,errors:[]};if(typeof document>"u")return t;let i=e.root||document,r=e.skipFixes||[];try{let u=i.querySelectorAll("a,button,input,select,textarea,img,table,[onclick],[tabindex],h1,h2,h3,h4,h5,h6,iframe,video,audio,[role],[aria-label],[aria-labelledby]");t.scanned=u.length;let s=0;if(u.forEach(o=>{try{let n=o,a=n.tagName.toLowerCase();if(!r.includes("headings")&&/^h[1-6]$/.test(a)){let c=parseInt(a[1]);c>s+1&&s!==0&&(n.setAttribute("aria-level",String(s+1)),t.fixed++),s=c}if(!r.includes("buttons")&&(a==="a"||a==="button")&&!n.innerText.trim()&&!n.getAttribute("aria-label")){let c=n.getAttribute("title")||n.getAttribute("aria-label")||"Interactive element";n.setAttribute("aria-label",c),t.fixed++}if(r.includes("clickables")||(n.hasAttribute("onclick")||typeof window<"u"&&window.getComputedStyle(n).cursor==="pointer")&&!["button","a","input","select","textarea"].includes(a)&&(n.getAttribute("role")||(n.setAttribute("role","button"),t.fixed++),n.tabIndex<0&&(n.tabIndex=0,t.fixed++),n._yuktKeyBound||(n.addEventListener("keydown",d=>{(d.key==="Enter"||d.key===" ")&&(d.preventDefault(),n.click())}),n._yuktKeyBound=!0)),!r.includes("forms")&&["input","select","textarea"].includes(a)){if(!n.getAttribute("aria-label")&&!n.getAttribute("aria-labelledby")){let c=n.getAttribute("placeholder")||n.getAttribute("name")||n.getAttribute("title")||a;n.setAttribute("aria-label",c),t.fixed++}n.hasAttribute("required")&&!n.getAttribute("aria-required")&&(n.setAttribute("aria-required","true"),t.fixed++)}!r.includes("images")&&a==="img"&&!n.hasAttribute("alt")&&(n.setAttribute("alt",""),n.setAttribute("aria-hidden","true"),t.fixed++),!r.includes("tables")&&a==="table"&&!o.querySelector("th")&&(n.getAttribute("role")||(n.setAttribute("role","grid"),t.fixed++)),!r.includes("media")&&["video","audio"].includes(a)&&(n.hasAttribute("controls")||(n.setAttribute("controls","true"),t.fixed++)),!r.includes("iframes")&&a==="iframe"&&!n.getAttribute("title")&&(n.setAttribute("title","Embedded content"),t.fixed++)}catch(n){t.errors.push(`Error fixing element ${o.tagName}: ${n.message}`)}}),e.highContrast&&(document.documentElement.style.filter="contrast(1.15) brightness(1.05)"),e.reduceMotion&&(document.documentElement.style.scrollBehavior="auto",!document.getElementById("yukt-reduce-motion"))){let o=document.createElement("style");o.id="yukt-reduce-motion",o.textContent="*, *::before, *::after { transition: none !important; animation: none !important; }",document.head.appendChild(o)}}catch(u){t.errors.push(`General error in applyFixes: ${u.message}`)}return t},startObserver(e){this.observer||typeof document>"u"||(this.observer=new MutationObserver(t=>{clearTimeout(this._mutationTimer),this._mutationTimer=setTimeout(()=>{t.forEach(i=>{i.addedNodes.forEach(r=>{r instanceof HTMLElement&&this.applyFixes({...e,root:r})})})},100)}),this.observer.observe(document.body,{childList:!0,subtree:!0,attributes:!1}))},stopObserver(){this.observer&&(this.observer.disconnect(),this.observer=null),this._mutationTimer&&clearTimeout(this._mutationTimer)},cleanup(){this.stopObserver(),this.removeLiveRegion();let e=document.getElementById("yukt-reduce-motion");e&&e.remove(),typeof document<"u"&&(document.documentElement.style.filter="",document.documentElement.style.scrollBehavior="")},ensureLiveRegion(){if(typeof document>"u"||document.getElementById("yukt-sr-announcer"))return;let e=document.createElement("div");e.id="yukt-sr-announcer",e.setAttribute("aria-live","polite"),e.setAttribute("aria-atomic","true"),e.style.cssText="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;",document.body.appendChild(e)},removeLiveRegion(){if(typeof document>"u")return;let e=document.getElementById("yukt-sr-announcer");e&&e.remove()},announce(e){if(typeof document>"u")return;let t=document.getElementById("yukt-sr-announcer");t&&(t.textContent="",setTimeout(()=>{t.textContent=e},50))},checkContrast(e,t,i=4.5){try{return(u=>{let s=document.createElement("div");s.style.color=u,s.style.backgroundColor=t,document.body.appendChild(s);let o=window.getComputedStyle(s).color,n=window.getComputedStyle(s).backgroundColor;s.remove();let a=o.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/),c=n.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);if(!a||!c)return 1;let d=this.rgbToLuminance(parseInt(a[1]),parseInt(a[2]),parseInt(a[3])),m=this.rgbToLuminance(parseInt(c[1]),parseInt(c[2]),parseInt(c[3])),b=Math.max(d,m),v=Math.min(d,m);return(b+.05)/(v+.05)})(e)>=i}catch(r){return console.warn("Contrast check failed:",r),!0}},validatePage(){let e=[],t=[];if(typeof document>"u")return{score:0,issues:["Server-side rendering detected"],recommendations:[]};document.documentElement.getAttribute("lang")||(e.push("Missing lang attribute on html element"),t.push('Add lang attribute to <html> element (e.g., <html lang="en">)')),document.title||(e.push("Missing page title"),t.push("Add a descriptive <title> element")),document.querySelectorAll('a,button,input,select,textarea,[tabindex]:not([tabindex="-1"])').length===0&&(e.push("No keyboard-focusable elements found"),t.push("Ensure interactive elements are keyboard accessible"));let r=document.querySelectorAll("img:not([alt])");r.length>0&&(e.push(`${r.length} images missing alt text`),t.push("Add descriptive alt text to all images"));let u=Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6")),s=0;return u.forEach((n,a)=>{let c=parseInt(n.tagName[1]);a>0&&c>s+1&&(e.push(`Skipped heading level: ${n.tagName} after h${s}`),t.push("Ensure heading hierarchy is sequential")),s=c}),{score:Math.max(0,100-e.length*10),issues:e,recommendations:t}}};var p=A(require("react"),1),_=A(require("react-dom/client"),1),M=require("react/jsx-runtime");function x(e,t=!0,i={fixes:0,nodes:0,renderTime:0}){let r=i.nodes===0,u=r?performance.now():0;if(!p.default.isValidElement(e))return e;i.nodes++;let s=e,o={...s.props},n=s.type,a=!1;t&&(["input","textarea","select"].includes(n)&&!o["aria-label"]&&(o["aria-label"]=o.placeholder||o.name||`${n} field`,a=!0),n==="img"&&(o.alt===void 0||o.alt===null)&&(o.alt="",o["aria-hidden"]="true",a=!0),(n==="div"||n==="span")&&o.onClick&&(o.role||(o.role="button",a=!0),o.tabIndex===void 0&&(o.tabIndex=0,a=!0)),a&&i.fixes++);let c=p.default.Children.map(o.children,m=>p.default.isValidElement(m)?x(m,t,i):m),d=p.default.cloneElement(s,o,c);return r&&(i.renderTime=parseFloat((performance.now()-u).toFixed(2))),d}function F(e,t,i=!0){let r=document.querySelector(t);if(!r)return;let s=x(e,i,{fixes:0,nodes:0,renderTime:0});_.default.createRoot(r).render((0,M.jsx)(p.default.StrictMode,{children:s}))}var f=require("react");var l=require("react/jsx-runtime");function C({children:e}){let[t,i]=(0,f.useState)(!1),[r,u]=(0,f.useState)(!1),[s,o]=(0,f.useState)(!1),[n,a]=(0,f.useState)({fixes:0,nodes:0,renderTime:0}),c=(0,f.useRef)(null);(0,f.useEffect)(()=>{i(!0)},[]);let d={fixes:0,nodes:0,renderTime:0},m=(0,f.useMemo)(()=>x(e,r,d),[e,r]);return(0,f.useEffect)(()=>{t&&(n.fixes!==d.fixes||n.nodes!==d.nodes)&&a({...d})},[m,r,t]),(0,f.useEffect)(()=>{if(!s)return;let b=v=>{c.current&&!c.current.contains(v.target)&&o(!1)};return document.addEventListener("mousedown",b),()=>document.removeEventListener("mousedown",b)},[s]),t?(0,l.jsxs)(l.Fragment,{children:[m,(0,l.jsx)("button",{onClick:()=>o(!0),style:{position:"fixed",bottom:25,right:25,width:60,height:60,borderRadius:"50%",background:"#1a202c",color:"white",border:"none",cursor:"pointer",zIndex:9999,boxShadow:"0 4px 20px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"28px"},children:"\u267F"}),s&&(0,l.jsxs)("div",{ref:c,style:{position:"fixed",bottom:95,right:25,width:340,background:"#ffffff",borderRadius:"20px",padding:"24px",boxShadow:"0 10px 40px rgba(0,0,0,0.15)",zIndex:1e4,border:"1px solid #f0f0f0",fontFamily:"system-ui, sans-serif"},children:[(0,l.jsxs)("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:"20px"},children:[(0,l.jsxs)("div",{style:{display:"flex",alignItems:"center",gap:"12px"},children:[(0,l.jsx)("span",{style:{fontSize:"22px"},children:"\u267F"}),(0,l.jsx)("strong",{style:{fontSize:"18px"},children:"ADA accessibility"})]}),(0,l.jsx)("button",{onClick:()=>o(!1),style:{background:"none",border:"none",cursor:"pointer",fontSize:"20px"},children:"\xD7"})]}),(0,l.jsx)("button",{onClick:()=>u(!r),style:{width:"100%",padding:"16px",borderRadius:"12px",border:"none",cursor:"pointer",fontWeight:"700",background:r?"#dcfce7":"#eff6ff",color:r?"#065f46":"#2563eb",marginBottom:"20px"},children:r?"Disable ADA Engine":"Enable ADA Engine"}),(0,l.jsx)("div",{style:{borderTop:"1px solid #edf2f7",paddingTop:"16px",fontSize:"12px",color:"#718096"},children:r?(0,l.jsxs)(l.Fragment,{children:[(0,l.jsxs)("div",{style:{color:"#2d3748",fontWeight:"600",marginBottom:"4px"},children:["yuktai-a11y: ",n.fixes," fixes applied."]}),(0,l.jsxs)("div",{children:["Nodes scanned: ",n.nodes]}),(0,l.jsxs)("div",{style:{marginTop:"4px",color:"#a0aec0"},children:["Render time: ",n.renderTime,"ms"]})]}):(0,l.jsx)("div",{style:{fontStyle:"italic"},children:"ADA Engine is offline."})})]})]}):(0,l.jsx)(l.Fragment,{children:e})}function Y(){if(!globalThis.__yuktai_runtime__){let e=new h;e.register(k.name,k),e.register(E.name,E),e.register(R.name,R),e.register(w.name,w),globalThis.__yuktai_runtime__=e}return globalThis.__yuktai_runtime__}var L=Y(),P={render:F,list(){return L.getPlugins()},use(e){return L.use(e)}},K=P;0&&(module.exports={YuktAI,YuktAIWrapper});
+"use strict";
+"use client";
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/index.ts
+var index_exports = {};
+__export(index_exports, {
+  YuktAI: () => YuktAI,
+  YuktAIWrapper: () => YuktAIWrapper,
+  default: () => index_default
+});
+module.exports = __toCommonJS(index_exports);
+
+// src/runtime/runtime.ts
+var Runtime = class {
+  plugins = /* @__PURE__ */ new Map();
+  register(name, plugin) {
+    if (!plugin || typeof plugin.execute !== "function") {
+      throw new Error(`Invalid plugin: ${name}`);
+    }
+    this.plugins.set(name, plugin);
+  }
+  /**
+   * 🔹 Direct Plugin Access
+   * This is what YuktAI.use(name) calls.
+   */
+  use(name) {
+    return this.plugins.get(name);
+  }
+  /**
+   * 🔹 Run task
+   */
+  async run(task, input) {
+    try {
+      const plugin = this.use(task);
+      if (!plugin) {
+        throw new Error(`Plugin not found: ${task}`);
+      }
+      return await plugin.execute(input);
+    } catch (err) {
+      console.error(`[YuktAI Runtime Error in ${task}]:`, err);
+      throw err;
+    }
+  }
+  getPlugins() {
+    return Array.from(this.plugins.keys());
+  }
+};
+
+// src/plugins/ai.ts
+var aiPlugin = {
+  name: "ai.text",
+  async execute(input) {
+    return `\u{1F916} YuktAI says: ${input}`;
+  }
+};
+
+// src/plugins/voice.ts
+var voicePlugin = {
+  name: "voice.text",
+  async execute(input) {
+    if (!input || input.trim() === "") {
+      return "\u{1F3A4} No speech detected";
+    }
+    return `\u{1F3A4} You said: ${input}`;
+  }
+};
+
+// src/plugins/ocr.ts
+var import_tesseract = __toESM(require("tesseract.js"), 1);
+var worker = null;
+var currentLang = null;
+function detectLang(buffer) {
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(
+    new Uint8Array(buffer.slice(0, 2e3))
+  );
+  if (/[\u0C00-\u0C7F]/.test(text)) return "tel";
+  if (/[\u0900-\u097F]/.test(text)) return "hin";
+  if (/[\u0B80-\u0BFF]/.test(text)) return "tam";
+  if (/[\u4E00-\u9FFF]/.test(text)) return "chi_sim";
+  if (/[\u3040-\u30FF]/.test(text)) return "jpn";
+  if (/[\u0600-\u06FF]/.test(text)) return "ara";
+  if (/[\u0400-\u04FF]/.test(text)) return "rus";
+  return "eng";
+}
+async function getWorker(lang) {
+  if (worker && currentLang === lang) return worker;
+  if (worker) {
+    await worker.terminate();
+    worker = null;
+  }
+  worker = await import_tesseract.default.createWorker({
+    langPath: "/tessdata",
+    // 🔥 BEST (self-host)
+    // OR use:
+    // langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/",
+    logger: () => {
+    }
+  });
+  await worker.loadLanguage(lang);
+  await worker.initialize(lang);
+  currentLang = lang;
+  return worker;
+}
+var ocrSmartPlugin = {
+  name: "image.ocr.smart",
+  async execute(input) {
+    try {
+      if (!input?.file) return "\u274C No file provided";
+      const blob = input.file instanceof Blob ? input.file : new Blob([input.file], {
+        type: input.type ?? "image/png"
+      });
+      const lang = input.lang || detectLang(await blob.arrayBuffer()) || "eng";
+      const workerInstance = await getWorker(lang);
+      const { data } = await workerInstance.recognize(blob);
+      const text = data.text?.trim();
+      if (!text) return "\u26A0\uFE0F No text detected";
+      return {
+        language: lang,
+        confidence: Math.round(data.confidence ?? 0),
+        text
+      };
+    } catch (err) {
+      console.error("[ocrSmartPlugin]", err);
+      return "\u274C OCR failed";
+    }
+  }
+};
+
+// src/plugins/wcag.ts
+var wcagPlugin = {
+  name: "ui.a11y.pro",
+  version: "1.0.1",
+  observer: null,
+  /**
+   * Main entry point for the accessibility plugin.
+   * @param config Configuration options
+   * @returns Promise resolving to a report or status message
+   */
+  async execute(config) {
+    if (!config?.enabled) {
+      this.stopObserver();
+      return "yuktai-a11y: disabled";
+    }
+    try {
+      const report = this.applyFixes(config);
+      if (config.autoFix) {
+        this.startObserver(config);
+      }
+      this.ensureLiveRegion();
+      this.announce(`Accessibility active. ${report.fixed} fixes applied.`);
+      if (config.validate) {
+        const validation = this.validatePage();
+        return { ...report, validation };
+      }
+      return report;
+    } catch (error) {
+      console.error("WCAG Plugin execution error:", error);
+      return { fixed: 0, scanned: 0, errors: [error.message] };
+    }
+  },
+  /**
+   * Applies accessibility fixes to DOM elements.
+   * IMPORTANT: Never modifies 'id' attributes — developer owns those.
+   * @param config Configuration options
+   * @returns Report of fixes applied
+   */
+  applyFixes(config) {
+    const report = { fixed: 0, scanned: 0, errors: [] };
+    if (typeof document === "undefined") return report;
+    const root = config.root || document;
+    const skipFixes = config.skipFixes || [];
+    try {
+      const elements = root.querySelectorAll(
+        "a,button,input,select,textarea,img,table,[onclick],[tabindex],h1,h2,h3,h4,h5,h6,iframe,video,audio,[role],[aria-label],[aria-labelledby]"
+      );
+      report.scanned = elements.length;
+      let lastHeadingLevel = 0;
+      elements.forEach((el) => {
+        try {
+          const h = el;
+          const tag = h.tagName.toLowerCase();
+          if (!skipFixes.includes("headings") && /^h[1-6]$/.test(tag)) {
+            const level = parseInt(tag[1]);
+            if (level > lastHeadingLevel + 1 && lastHeadingLevel !== 0) {
+              h.setAttribute("aria-level", String(lastHeadingLevel + 1));
+              report.fixed++;
+            }
+            lastHeadingLevel = level;
+          }
+          if (!skipFixes.includes("buttons") && (tag === "a" || tag === "button") && !h.innerText.trim()) {
+            if (!h.getAttribute("aria-label")) {
+              const label = h.getAttribute("title") || h.getAttribute("aria-label") || "Interactive element";
+              h.setAttribute("aria-label", label);
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("clickables")) {
+            const isClickable = h.hasAttribute("onclick") || typeof window !== "undefined" && window.getComputedStyle(h).cursor === "pointer";
+            if (isClickable && !["button", "a", "input", "select", "textarea"].includes(tag)) {
+              if (!h.getAttribute("role")) {
+                h.setAttribute("role", "button");
+                report.fixed++;
+              }
+              if (h.tabIndex < 0) {
+                h.tabIndex = 0;
+                report.fixed++;
+              }
+              if (!h._yuktKeyBound) {
+                h.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    h.click();
+                  }
+                });
+                h._yuktKeyBound = true;
+              }
+            }
+          }
+          if (!skipFixes.includes("forms") && ["input", "select", "textarea"].includes(tag)) {
+            if (!h.getAttribute("aria-label") && !h.getAttribute("aria-labelledby")) {
+              const label = h.getAttribute("placeholder") || h.getAttribute("name") || h.getAttribute("title") || tag;
+              h.setAttribute("aria-label", label);
+              report.fixed++;
+            }
+            if (h.hasAttribute("required") && !h.getAttribute("aria-required")) {
+              h.setAttribute("aria-required", "true");
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("images") && tag === "img" && !h.hasAttribute("alt")) {
+            h.setAttribute("alt", "");
+            h.setAttribute("aria-hidden", "true");
+            report.fixed++;
+          }
+          if (!skipFixes.includes("tables") && tag === "table" && !el.querySelector("th")) {
+            if (!h.getAttribute("role")) {
+              h.setAttribute("role", "grid");
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("media") && ["video", "audio"].includes(tag)) {
+            if (!h.hasAttribute("controls")) {
+              h.setAttribute("controls", "true");
+              report.fixed++;
+            }
+          }
+          if (!skipFixes.includes("iframes") && tag === "iframe" && !h.getAttribute("title")) {
+            h.setAttribute("title", "Embedded content");
+            report.fixed++;
+          }
+        } catch (elementError) {
+          report.errors.push(`Error fixing element ${el.tagName}: ${elementError.message}`);
+        }
+      });
+      if (config.highContrast) {
+        document.documentElement.style.filter = "contrast(1.15) brightness(1.05)";
+      }
+      if (config.reduceMotion) {
+        document.documentElement.style.scrollBehavior = "auto";
+        if (!document.getElementById("yukt-reduce-motion")) {
+          const style = document.createElement("style");
+          style.id = "yukt-reduce-motion";
+          style.textContent = `*, *::before, *::after { transition: none !important; animation: none !important; }`;
+          document.head.appendChild(style);
+        }
+      }
+    } catch (error) {
+      report.errors.push(`General error in applyFixes: ${error.message}`);
+    }
+    return report;
+  },
+  /**
+   * Starts observing DOM mutations to apply fixes to new elements.
+   * @param config Configuration options
+   */
+  startObserver(config) {
+    if (this.observer || typeof document === "undefined") return;
+    this.observer = new MutationObserver((mutations) => {
+      clearTimeout(this._mutationTimer);
+      this._mutationTimer = setTimeout(() => {
+        mutations.forEach((m) => {
+          m.addedNodes.forEach((node) => {
+            if (node instanceof HTMLElement) {
+              this.applyFixes({ ...config, root: node });
+            }
+          });
+        });
+      }, 100);
+    });
+    this.observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: false
+      // Only care about new elements
+    });
+  },
+  /**
+   * Stops the DOM mutation observer.
+   */
+  stopObserver() {
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
+    if (this._mutationTimer) {
+      clearTimeout(this._mutationTimer);
+    }
+  },
+  /**
+   * Cleans up all resources and resets the plugin state.
+   */
+  cleanup() {
+    this.stopObserver();
+    this.removeLiveRegion();
+    const style = document.getElementById("yukt-reduce-motion");
+    if (style) style.remove();
+    if (typeof document !== "undefined") {
+      document.documentElement.style.filter = "";
+      document.documentElement.style.scrollBehavior = "";
+    }
+  },
+  /**
+   * Ensures a screen reader live region exists for announcements.
+   */
+  ensureLiveRegion() {
+    if (typeof document === "undefined") return;
+    if (document.getElementById("yukt-sr-announcer")) return;
+    const node = document.createElement("div");
+    node.id = "yukt-sr-announcer";
+    node.setAttribute("aria-live", "polite");
+    node.setAttribute("aria-atomic", "true");
+    node.style.cssText = "position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;";
+    document.body.appendChild(node);
+  },
+  /**
+   * Removes the screen reader live region.
+   */
+  removeLiveRegion() {
+    if (typeof document === "undefined") return;
+    const node = document.getElementById("yukt-sr-announcer");
+    if (node) node.remove();
+  },
+  /**
+   * Announces a message to screen readers.
+   * @param msg Message to announce
+   */
+  announce(msg) {
+    if (typeof document === "undefined") return;
+    const node = document.getElementById("yukt-sr-announcer");
+    if (!node) return;
+    node.textContent = "";
+    setTimeout(() => {
+      node.textContent = msg;
+    }, 50);
+  },
+  /**
+   * Checks if two colors have sufficient contrast ratio.
+   * @param fg Foreground color (hex, rgb, or color name)
+   * @param bg Background color (hex, rgb, or color name)
+   * @param ratio Minimum contrast ratio (default 4.5 for normal text)
+   * @returns True if contrast is sufficient
+   */
+  checkContrast(fg, bg, ratio = 4.5) {
+    try {
+      const getLuminance = (color) => {
+        const temp = document.createElement("div");
+        temp.style.color = color;
+        temp.style.backgroundColor = bg;
+        document.body.appendChild(temp);
+        const fgRgb = window.getComputedStyle(temp).color;
+        const bgRgb = window.getComputedStyle(temp).backgroundColor;
+        temp.remove();
+        const fgMatch = fgRgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        const bgMatch = bgRgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (!fgMatch || !bgMatch) return 1;
+        const fgL = this.rgbToLuminance(parseInt(fgMatch[1]), parseInt(fgMatch[2]), parseInt(fgMatch[3]));
+        const bgL = this.rgbToLuminance(parseInt(bgMatch[1]), parseInt(bgMatch[2]), parseInt(bgMatch[3]));
+        const lighter = Math.max(fgL, bgL);
+        const darker = Math.min(fgL, bgL);
+        return (lighter + 0.05) / (darker + 0.05);
+      };
+      return getLuminance(fg) >= ratio;
+    } catch (error) {
+      console.warn("Contrast check failed:", error);
+      return true;
+    }
+  },
+  /**
+   * Validates the current page for accessibility issues.
+   * @returns Detailed report of accessibility status
+   */
+  validatePage() {
+    const issues = [];
+    const recommendations = [];
+    if (typeof document === "undefined") {
+      return { score: 0, issues: ["Server-side rendering detected"], recommendations: [] };
+    }
+    if (!document.documentElement.getAttribute("lang")) {
+      issues.push("Missing lang attribute on html element");
+      recommendations.push('Add lang attribute to <html> element (e.g., <html lang="en">)');
+    }
+    if (!document.title) {
+      issues.push("Missing page title");
+      recommendations.push("Add a descriptive <title> element");
+    }
+    const focusableElements = document.querySelectorAll('a,button,input,select,textarea,[tabindex]:not([tabindex="-1"])');
+    if (focusableElements.length === 0) {
+      issues.push("No keyboard-focusable elements found");
+      recommendations.push("Ensure interactive elements are keyboard accessible");
+    }
+    const imagesWithoutAlt = document.querySelectorAll("img:not([alt])");
+    if (imagesWithoutAlt.length > 0) {
+      issues.push(`${imagesWithoutAlt.length} images missing alt text`);
+      recommendations.push("Add descriptive alt text to all images");
+    }
+    const headings = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6"));
+    let lastLevel = 0;
+    headings.forEach((h, index) => {
+      const level = parseInt(h.tagName[1]);
+      if (index > 0 && level > lastLevel + 1) {
+        issues.push(`Skipped heading level: ${h.tagName} after h${lastLevel}`);
+        recommendations.push("Ensure heading hierarchy is sequential");
+      }
+      lastLevel = level;
+    });
+    const score = Math.max(0, 100 - issues.length * 10);
+    return { score, issues, recommendations };
+  }
+};
+
+// src/core/renderer.tsx
+var import_react = __toESM(require("react"), 1);
+function render(element, enabled = true, report = { fixes: 0, nodes: 0, renderTime: 0 }) {
+  const isRoot = report.nodes === 0;
+  const startTime = isRoot ? performance.now() : 0;
+  if (!import_react.default.isValidElement(element)) return element;
+  report.nodes++;
+  const el = element;
+  const props = { ...el.props };
+  const type = el.type;
+  let isModified = false;
+  if (enabled) {
+    if (["input", "textarea", "select"].includes(type)) {
+      if (!props["aria-label"] && !props["aria-labelledby"]) {
+        props["aria-label"] = props.placeholder || props.name || `${type} field`;
+        isModified = true;
+      }
+    }
+    if (type === "img" && (props.alt === void 0 || props.alt === null)) {
+      props.alt = "";
+      props["aria-hidden"] = "true";
+      isModified = true;
+    }
+    if (props.onClick && !["button", "a", "input"].includes(type)) {
+      if (!props.role) props.role = "button";
+      if (props.tabIndex === void 0) props.tabIndex = 0;
+      if (!props.onKeyDown) {
+        const originalOnClick = props.onClick;
+        props.onKeyDown = (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            originalOnClick(e);
+          }
+        };
+        isModified = true;
+      }
+    }
+    if (type === "input" && !props.autoComplete) {
+      if (props.name?.includes("email")) props.autoComplete = "email";
+      if (props.name?.includes("tel")) props.autoComplete = "tel";
+    }
+    if (type === "a" && props.target === "_blank") {
+      if (!props.rel?.includes("noopener")) {
+        props.rel = "noopener noreferrer";
+        isModified = true;
+      }
+      const currentLabel = props["aria-label"] || (typeof props.children === "string" ? props.children : "link");
+      if (!currentLabel.includes("opens in new window")) {
+        props["aria-label"] = `${currentLabel} (opens in new window)`;
+        isModified = true;
+      }
+    }
+    const landmarks = {
+      nav: "navigation",
+      header: "banner",
+      footer: "contentinfo",
+      main: "main"
+    };
+    if (landmarks[type] && !props.role) {
+      props.role = landmarks[type];
+      isModified = true;
+    }
+    if (isModified) report.fixes++;
+  }
+  const children = import_react.default.Children.map(
+    props.children,
+    (child) => import_react.default.isValidElement(child) ? render(child, enabled, report) : child
+  );
+  const finalElement = import_react.default.cloneElement(el, props, children);
+  if (isRoot) {
+    report.renderTime = parseFloat((performance.now() - startTime).toFixed(2));
+  }
+  return finalElement;
+}
+
+// src/core/YuktAIWrapper.tsx
+var import_react2 = require("react");
+var import_jsx_runtime = require("react/jsx-runtime");
+function YuktAIWrapper({ children }) {
+  const [mounted, setMounted] = (0, import_react2.useState)(false);
+  const [enabled, setEnabled] = (0, import_react2.useState)(false);
+  const [open, setOpen] = (0, import_react2.useState)(false);
+  const [stats, setStats] = (0, import_react2.useState)({ fixes: 0, nodes: 0, renderTime: 0 });
+  const panelRef = (0, import_react2.useRef)(null);
+  (0, import_react2.useEffect)(() => {
+    setMounted(true);
+  }, []);
+  (0, import_react2.useEffect)(() => {
+    if (enabled) {
+      const style = document.createElement("style");
+      style.id = "yuktai-dynamic-styles";
+      style.innerHTML = `
+        /* Level AA: Force visible focus rings for keyboard users */
+        *:focus-visible { 
+          outline: 3px solid #2563eb !important; 
+          outline-offset: 2px !important; 
+          box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.3) !important;
+        }
+        /* Level AAA: High Contrast Mode */
+        .yuktai-aaa-active {
+          filter: contrast(1.1);
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.classList.add("yuktai-aaa-active");
+    } else {
+      document.getElementById("yuktai-dynamic-styles")?.remove();
+      document.body.classList.remove("yuktai-aaa-active");
+    }
+  }, [enabled]);
+  const currentReport = { fixes: 0, nodes: 0, renderTime: 0 };
+  const content = (0, import_react2.useMemo)(() => {
+    return render(children, enabled, currentReport);
+  }, [children, enabled]);
+  (0, import_react2.useEffect)(() => {
+    if (mounted) {
+      setStats({ ...currentReport });
+    }
+  }, [content, enabled, mounted]);
+  (0, import_react2.useEffect)(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+  if (!mounted) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children });
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    content,
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+      "button",
+      {
+        onClick: () => setOpen(true),
+        style: {
+          position: "fixed",
+          bottom: 25,
+          right: 25,
+          width: 60,
+          height: 60,
+          borderRadius: "50%",
+          background: "#1a202c",
+          color: "white",
+          border: "none",
+          cursor: "pointer",
+          zIndex: 9999,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "28px"
+        },
+        children: "\u267F"
+      }
+    ),
+    open && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+      "div",
+      {
+        ref: panelRef,
+        style: {
+          position: "fixed",
+          bottom: 95,
+          right: 25,
+          width: 340,
+          background: "#ffffff",
+          borderRadius: "20px",
+          padding: "24px",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+          zIndex: 1e4,
+          border: "1px solid #f0f0f0",
+          fontFamily: "sans-serif"
+        },
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 20 }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 12 }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { fontSize: 22 }, children: "\u267F" }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { style: { fontSize: 18 }, children: "ADA accessibility" })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => setOpen(false), style: { background: "none", border: "none", fontSize: 24, color: "#ccc", cursor: "pointer" }, children: "\xD7" })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "button",
+            {
+              onClick: () => setEnabled(!enabled),
+              style: {
+                width: "100%",
+                padding: 16,
+                borderRadius: 12,
+                border: "none",
+                cursor: "pointer",
+                fontWeight: "700",
+                background: enabled ? "#dcfce7" : "#eff6ff",
+                color: enabled ? "#065f46" : "#2563eb",
+                marginBottom: 20,
+                transition: "0.2s"
+              },
+              children: enabled ? "Disable ADA Engine" : "Enable ADA Engine"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { borderTop: "1px solid #edf2f7", paddingTop: 16, fontSize: 13, color: "#718096" }, children: enabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { color: "#2d3748", fontWeight: "600", marginBottom: 4 }, children: [
+              "yuktai-a11y: ",
+              stats.fixes,
+              " fixes applied."
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+              "Nodes scanned: ",
+              stats.nodes
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginTop: 4, color: "#a0aec0", fontSize: 11 }, children: [
+              "Render time: ",
+              stats.renderTime,
+              "ms"
+            ] })
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontStyle: "italic" }, children: "ADA Engine is offline." }) })
+        ]
+      }
+    )
+  ] });
+}
+
+// src/index.ts
+function getRuntime() {
+  if (!globalThis.__yuktai_runtime__) {
+    const runtime2 = new Runtime();
+    runtime2.register(aiPlugin.name, aiPlugin);
+    runtime2.register(voicePlugin.name, voicePlugin);
+    runtime2.register(ocrSmartPlugin.name, ocrSmartPlugin);
+    runtime2.register(wcagPlugin.name, wcagPlugin);
+    globalThis.__yuktai_runtime__ = runtime2;
+  }
+  return globalThis.__yuktai_runtime__;
+}
+var runtime = getRuntime();
+var YuktAI = {
+  render,
+  list() {
+    return runtime.getPlugins();
+  },
+  use(name) {
+    return runtime.use(name);
+  }
+};
+var index_default = YuktAI;
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  YuktAI,
+  YuktAIWrapper
+});

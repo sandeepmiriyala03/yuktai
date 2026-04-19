@@ -20,7 +20,19 @@ declare class Runtime {
     getPlugins(): string[];
 }
 
-declare function render(element: React.ReactNode, selector: string, enabled?: boolean): void;
+/**
+ * Metadata for the YuktAI reporting engine
+ */
+interface A11yReport {
+    fixes: number;
+    nodes: number;
+    renderTime: number;
+}
+/**
+ * Universal DOM Accessibility Fixer (A, AA, AAA compliant)
+ * Deep-walks the React tree to inject compliance attributes.
+ */
+declare function render(element: React.ReactNode, enabled?: boolean, report?: A11yReport): React.ReactNode;
 
 declare function YuktAIWrapper({ children }: {
     children?: React.ReactNode;
