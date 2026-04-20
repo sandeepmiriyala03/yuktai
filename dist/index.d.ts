@@ -20,28 +20,59 @@ declare class Runtime {
     getPlugins(): string[];
 }
 
+type ColorBlindMode = "none" | "deuteranopia" | "protanopia" | "tritanopia" | "achromatopsia";
+type Severity = "critical" | "serious" | "moderate" | "minor";
 interface A11yConfig {
     enabled: boolean;
     highContrast?: boolean;
     reduceMotion?: boolean;
     autoFix?: boolean;
     fontSizeMultiplier?: number;
-    colorBlindMode?: "none" | "deuteranopia" | "protanopia" | "tritanopia" | "achromatopsia";
+    colorBlindMode?: ColorBlindMode;
     keyboardHints?: boolean;
+}
+interface A11yFix {
+    tag: string;
+    fix: string;
+    severity: Severity;
+    element: string;
 }
 interface A11yReport {
     fixed: number;
     scanned: number;
-    details: {
-        tag: string;
-        fix: string;
-        element: string;
-    }[];
+    renderTime: number;
+    details: A11yFix[];
 }
+declare const wcagPlugin: {
+    name: string;
+    version: string;
+    observer: MutationObserver | null;
+    execute(config: A11yConfig): Promise<string>;
+    scan(): A11yReport;
+    applyFixes(config: A11yConfig): A11yReport;
+    removeColorBlindSvg(): void;
+    startObserver(config: A11yConfig): void;
+    stopObserver(): void;
+    ensureLiveRegion(): void;
+    removeLiveRegion(): void;
+    announce(msg: string): void;
+};
 
-declare function YuktAIWrapper({ children }: {
+interface YuktAIWrapperProps {
     children?: ReactNode;
-}): react_jsx_runtime.JSX.Element;
+    position?: "left" | "right";
+}
+declare function YuktAIWrapper({ children, position }: YuktAIWrapperProps): react_jsx_runtime.JSX.Element;
+
+declare const aiPlugin: {
+    name: string;
+    execute(input: string): Promise<string>;
+};
+
+declare const voicePlugin: {
+    name: string;
+    execute(input: string): Promise<string>;
+};
 
 declare global {
     var __yuktai_runtime__: Runtime | undefined;
@@ -52,6 +83,7 @@ declare const YuktAI: {
         version: string;
         observer: MutationObserver | null;
         execute(config: A11yConfig): Promise<string>;
+        scan(): A11yReport;
         applyFixes(config: A11yConfig): A11yReport;
         removeColorBlindSvg(): void;
         startObserver(config: A11yConfig): void;
@@ -62,6 +94,8 @@ declare const YuktAI: {
     };
     list(): string[];
     use(name: string): Plugin | undefined;
+    fix(config?: Partial<A11yConfig>): A11yReport;
+    scan(): A11yReport;
 };
 
-export { YuktAI, YuktAIWrapper, YuktAI as default };
+export { type A11yConfig, type A11yFix, type A11yReport, type ColorBlindMode, Runtime, type Severity, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, aiPlugin, YuktAIWrapper as default, voicePlugin, wcagPlugin as wcag, wcagPlugin };

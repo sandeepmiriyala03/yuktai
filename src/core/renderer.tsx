@@ -400,7 +400,7 @@ export const wcagPlugin = {
           if (input.type === "email" || n.includes("email"))           { input.autocomplete = "email";          report.fixed++; }
           else if (input.type === "tel" || n.includes("tel"))          { input.autocomplete = "tel";            report.fixed++; }
           else if (input.type === "password")                          { input.autocomplete = "current-password"; report.fixed++; }
-          else if (input.type === "url")                               { input.autocomplete = "url";            report.fixed++; }
+         // else if (input.type === "url")                               { input.autocomplete = "url";            report.fixed++; }
           else if (n.includes("firstname") || n.includes("fname"))     { input.autocomplete = "given-name";     report.fixed++; }
           else if (n.includes("lastname") || n.includes("lname"))      { input.autocomplete = "family-name";    report.fixed++; }
           else if (n === "name" || n.includes("fullname"))             { input.autocomplete = "name";           report.fixed++; }
@@ -497,17 +497,24 @@ export const wcagPlugin = {
         push(tag, `role="${LANDMARK_MAP[tag]}"`, "minor", h);
       }
 
-      // Multiple nav/section/article/aside need unique labels
-      if (["nav","section","article","aside"].includes(tag)) {
-        const siblings = document.querySelectorAll(tag);
-        if (siblings.length > 1 && !h.getAttribute("aria-label") && !h.getAttribute("aria-labelledby")) {
-          const heading = el.querySelector("h1,h2,h3,h4,h5,h6");
-          if (heading?.innerText?.trim()) {
-            h.setAttribute("aria-label", heading.innerText.trim());
-            push(tag, `aria-label from inner heading`, "moderate", h);
-          }
-        }
-      }
+    if (["nav", "section", "article", "aside"].includes(tag)) {
+  const siblings = el.parentElement?.querySelectorAll(tag);
+
+  if (
+    siblings &&
+    siblings.length > 1 &&
+    !h.getAttribute("aria-label") &&
+    !h.getAttribute("aria-labelledby")
+  ) {
+    const heading = el.querySelector("h1,h2,h3,h4,h5,h6");
+    const text = heading?.textContent?.trim();
+
+    if (text) {
+      h.setAttribute("aria-label", text);
+      push(tag, `aria-label from inner heading`, "moderate", h);
+    }
+  }
+}
 
       // details / summary
       if (tag === "details") {
@@ -523,18 +530,22 @@ export const wcagPlugin = {
         push(tag, 'aria-label="Toggle details" (empty summary)', "moderate", h);
       }
 
-      // dialog
-      if (tag === "dialog") {
-        if (!h.getAttribute("role")) {
-          h.setAttribute("role", "dialog");
-          push(tag, 'role="dialog"', "serious", h);
-        }
-        if (!h.getAttribute("aria-label") && !h.getAttribute("aria-labelledby")) {
-          const heading = el.querySelector("h1,h2,h3,h4,h5,h6");
-          h.setAttribute("aria-label", heading?.innerText?.trim() || "dialog");
-          push(tag, `aria-label added to dialog`, "serious", h);
-        }
-      }
+     if (tag === "dialog") {
+  // Only fix if role is incorrect
+  const role = h.getAttribute("role");
+  if (role && role !== "dialog") {
+    h.setAttribute("role", "dialog");
+    push(tag, 'role corrected to "dialog"', "serious", h);
+  }
+
+  if (!h.getAttribute("aria-label") && !h.getAttribute("aria-labelledby")) {
+    const heading = el.querySelector("h1,h2,h3,h4,h5,h6");
+    const text = heading?.textContent?.trim() || "dialog";
+
+    h.setAttribute("aria-label", text);
+    push(tag, `aria-label added to dialog`, "serious", h);
+  }
+}
 
       // ══════════════════════════════════════════════════════════════════════
       // INLINE ELEMENTS
