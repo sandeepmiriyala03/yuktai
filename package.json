@@ -9,43 +9,43 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "types":   "./dist/index.d.ts",
+      "import":  "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./core": {
-      "types": "./dist/core/renderer.d.ts",
-      "import": "./dist/core/renderer.js",
+      "types":   "./dist/core/renderer.d.ts",
+      "import":  "./dist/core/renderer.js",
       "require": "./dist/core/renderer.cjs"
     },
     "./react": {
-      "types": "./dist/core/YuktAIWrapper.d.ts",
-      "import": "./dist/core/YuktAIWrapper.js",
+      "types":   "./dist/core/YuktAIWrapper.d.ts",
+      "import":  "./dist/core/YuktAIWrapper.js",
       "require": "./dist/core/YuktAIWrapper.cjs"
     },
     "./next": {
-      "types": "./dist/core/YuktAIWrapper.d.ts",
-      "import": "./dist/core/YuktAIWrapper.js",
+      "types":   "./dist/core/YuktAIWrapper.d.ts",
+      "import":  "./dist/core/YuktAIWrapper.js",
       "require": "./dist/core/YuktAIWrapper.cjs"
     },
     "./plugins/ai": {
-      "types": "./dist/plugins/ai.d.ts",
-      "import": "./dist/plugins/ai.js",
+      "types":   "./dist/plugins/ai.d.ts",
+      "import":  "./dist/plugins/ai.js",
       "require": "./dist/plugins/ai.cjs"
     },
     "./plugins/ocr": {
-      "types": "./dist/plugins/ocr.d.ts",
-      "import": "./dist/plugins/ocr.js",
+      "types":   "./dist/plugins/ocr.d.ts",
+      "import":  "./dist/plugins/ocr.js",
       "require": "./dist/plugins/ocr.cjs"
     },
     "./plugins/voice": {
-      "types": "./dist/plugins/voice.d.ts",
-      "import": "./dist/plugins/voice.js",
+      "types":   "./dist/plugins/voice.d.ts",
+      "import":  "./dist/plugins/voice.js",
       "require": "./dist/plugins/voice.cjs"
     },
     "./plugins/wcag": {
-      "types": "./dist/plugins/wcag.d.ts",
-      "import": "./dist/plugins/wcag.js",
+      "types":   "./dist/plugins/wcag.d.ts",
+      "import":  "./dist/plugins/wcag.js",
       "require": "./dist/plugins/wcag.cjs"
     }
   },
@@ -53,13 +53,11 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
-    "dev": "tsup src/index.ts --format cjs,esm,iife --watch --dts --external react --external react-dom --global-name YuktAI",
-    "build": "tsup src/index.ts --format cjs,esm,iife --clean --dts --minify --external react --external react-dom --global-name YuktAI",
-    "lint": "tsc --noEmit",
+    "dev":            "tsup src/index.ts --format cjs,esm,iife --watch --dts --external react --external react-dom --global-name YuktAI --define process.env.NODE_ENV=\\\"development\\\"",
+    "build":          "tsup src/index.ts --format cjs,esm,iife --clean --dts --minify --external react --external react-dom --global-name YuktAI --define process.env.NODE_ENV=\\\"production\\\"",
+    "lint":           "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "repository": {
@@ -67,46 +65,32 @@
     "url": "git+https://github.com/sandeepmiriyala03/yuktai.git"
   },
   "keywords": [
-    "accessibility",
-    "a11y",
-    "wcag",
-    "aria",
-    "indic",
-    "ocr",
-    "voice",
-    "offline-ai",
-    "react",
-    "nextjs",
-    "vue",
-    "angular",
-    "yuktai",
-    "vibe-coding"
+    "accessibility", "a11y", "wcag", "aria",
+    "indic", "ocr", "voice", "offline-ai",
+    "react", "nextjs", "vue", "angular",
+    "yuktai", "vibe-coding"
   ],
   "author": "Sandeep Miriyala",
   "license": "ISC",
   "peerDependencies": {
-    "react": ">=18",
+    "react":     ">=18",
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
+    "react":     { "optional": true },
+    "react-dom": { "optional": true }
   },
   "dependencies": {
-    "idb-keyval": "^6.2.2",
-    "tesseract.js": "^7.0.0",
+    "idb-keyval":          "^6.2.2",
+    "tesseract.js":        "^7.0.0",
     "wasm-feature-detect": "^1.8.0"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
+    "@types/react":     "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.0.0"
+    "react":            "^19.0.0",
+    "react-dom":        "^19.0.0",
+    "tsup":             "^8.5.1",
+    "typescript":       "^5.0.0"
   }
 }
