@@ -1,6 +1,6 @@
 {
   "name": "@yuktishaalaa/yuktai",
-  "version": "2.0.5",
+  "version": "2.0.7",
   "description": "Privacy-first, offline-first universal accessibility engine with WCAG auto-fix, OCR, voice, and Indic language AI support.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -12,41 +12,6 @@
       "types":   "./dist/index.d.ts",
       "import":  "./dist/index.js",
       "require": "./dist/index.cjs"
-    },
-    "./core": {
-      "types":   "./dist/core/renderer.d.ts",
-      "import":  "./dist/core/renderer.js",
-      "require": "./dist/core/renderer.cjs"
-    },
-    "./react": {
-      "types":   "./dist/core/YuktAIWrapper.d.ts",
-      "import":  "./dist/core/YuktAIWrapper.js",
-      "require": "./dist/core/YuktAIWrapper.cjs"
-    },
-    "./next": {
-      "types":   "./dist/core/YuktAIWrapper.d.ts",
-      "import":  "./dist/core/YuktAIWrapper.js",
-      "require": "./dist/core/YuktAIWrapper.cjs"
-    },
-    "./plugins/ai": {
-      "types":   "./dist/plugins/ai.d.ts",
-      "import":  "./dist/plugins/ai.js",
-      "require": "./dist/plugins/ai.cjs"
-    },
-    "./plugins/ocr": {
-      "types":   "./dist/plugins/ocr.d.ts",
-      "import":  "./dist/plugins/ocr.js",
-      "require": "./dist/plugins/ocr.cjs"
-    },
-    "./plugins/voice": {
-      "types":   "./dist/plugins/voice.d.ts",
-      "import":  "./dist/plugins/voice.js",
-      "require": "./dist/plugins/voice.cjs"
-    },
-    "./plugins/wcag": {
-      "types":   "./dist/plugins/wcag.d.ts",
-      "import":  "./dist/plugins/wcag.js",
-      "require": "./dist/plugins/wcag.cjs"
     }
   },
   "publishConfig": {
@@ -57,19 +22,8 @@
   "scripts": {
     "dev":            "tsup --watch",
     "build":          "tsup",
-    "lint":           "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sandeepmiriyala03/yuktai.git"
-  },
-  "keywords": [
-    "accessibility", "a11y", "wcag", "aria",
-    "indic", "ocr", "voice", "offline-ai",
-    "react", "nextjs", "vue", "angular",
-    "yuktai", "vibe-coding"
-  ],
   "author": "Sandeep Miriyala",
   "license": "ISC",
   "peerDependencies": {
