@@ -10,7 +10,7 @@ export default defineConfig([
     external: ["react", "react-dom"],
   },
   {
-    entry: ["src/index.ts"],
+    entry: ["src/core/renderer.tsx"],
     format: ["iife"],
     globalName: "YuktAI",
     outDir: "dist",
@@ -18,7 +18,6 @@ export default defineConfig([
     dts: false,
     platform: "browser",
     outExtension: () => ({ js: ".global.js" }),
-    external: ["react", "react-dom", "tesseract.js", "idb-keyval", "wasm-feature-detect"],
     esbuildOptions(options) {
       options.define = {
         "process.env.NODE_ENV": '"production"',
