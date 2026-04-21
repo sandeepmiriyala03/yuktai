@@ -55,8 +55,8 @@
   },
   "files": ["dist"],
   "scripts": {
-    "dev":            "tsup src/index.ts --format cjs,esm,iife --watch --dts --external react --external react-dom --global-name YuktAI --define process.env.NODE_ENV=\\\"development\\\"",
-    "build":          "tsup src/index.ts --format cjs,esm,iife --clean --dts --minify --external react --external react-dom --global-name YuktAI --define process.env.NODE_ENV=\\\"production\\\"",
+    "dev":            "tsup --watch",
+    "build":          "tsup",
     "lint":           "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
