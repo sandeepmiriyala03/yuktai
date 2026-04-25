@@ -1,6 +1,6 @@
 {
   "name": "@yuktishaalaa/yuktai",
-  "version": "2.0.12",
+  "version": "2.0.13",
   "description": "Privacy-first, offline-first universal accessibility engine with WCAG auto-fix, OCR, voice, and Indic language AI support.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -18,7 +18,11 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
-  "files": ["dist"],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm":  ">=8.0.0"
+  },
+  "files": ["dist", ".npmrc"],
   "scripts": {
     "dev":            "tsup --watch",
     "build":          "tsup",
@@ -27,12 +31,14 @@
   "author": "Sandeep Miriyala",
   "license": "ISC",
   "peerDependencies": {
-    "react":     ">=18",
-    "react-dom": ">=18"
+    "react":     ">=17",
+    "react-dom": ">=17",
+    "next":      ">=13"
   },
   "peerDependenciesMeta": {
     "react":     { "optional": true },
-    "react-dom": { "optional": true }
+    "react-dom": { "optional": true },
+    "next":      { "optional": true }
   },
   "dependencies": {
     "idb-keyval":          "^6.2.2",
