@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "declaration": true,
+    "declarationMap": true,
     "emitDeclarationOnly": false,
     "isolatedModules": true
   },
