@@ -3,7 +3,7 @@
 > Universal runtime accessibility plugin — automatically fixes WCAG violations on every page, for every user, with zero configuration.
 
 [![npm](https://img.shields.io/npm/v/@yuktishaalaa/yuktai)](https://www.npmjs.com/package/@yuktishaalaa/yuktai)
-[![license](https://img.shields.io/badge/license-MIT-brightgreen)](./LICENSE)
+[![license](https://img.shields.io/badge/license--brightgreen)](./LICENSE)
 
 ---
 
@@ -335,4 +335,4 @@ After clicking **Apply settings**, the panel shows:
 
 ## License
 
-MIT © yuktai contributors
+ yuktai contributors
