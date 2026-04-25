@@ -458,7 +458,7 @@ After clicking **Apply settings**, the panel shows:
 ✓ 0 fixes needed · 534 nodes clean · 0.8ms · Score: 100/100
 ```
 
-`Score: 100/100` means the page is fully accessible. `0 fixes needed` is a passing result — the page was already accessible before yuktai ran.
+> **Note:** A score of 100/100 means yuktai found no issues it could automatically detect and fix. Automated scanning covers a significant portion of WCAG criteria but cannot substitute for manual testing and real user feedback. We recommend combining yuktai with periodic manual audits for comprehensive accessibility coverage.
 
 ---
 
@@ -467,7 +467,6 @@ After clicking **Apply settings**, the panel shows:
 - **Zero id attributes** — no injected node ever gets an `id`. All injected nodes tracked via module-level JavaScript references. Never collides with host app ids.
 - **Zero API keys** — runs entirely in the browser. No external calls, no telemetry, no cost.
 - **Zero framework lock-in** — `core/renderer.ts` has no framework imports. Works in Node.js, browsers, and test environments.
-
 - **One engine, many adapters** — all adapters import from `core/renderer.ts`. WCAG logic written once.
 
 ---
