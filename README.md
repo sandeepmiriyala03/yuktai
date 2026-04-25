@@ -1,6 +1,6 @@
 # @yuktishaalaa/yuktai
 
-> Universal runtime accessibility plugin — automatically fixes WCAG 2.2 violations on every page, for every user, with zero configuration. No JAWS needed.
+> Universal runtime accessibility plugin — automatically fixes WCAG 2.2 violations on every page, for every user, with zero configuration. 
 
 [![npm](https://img.shields.io/npm/v/@yuktishaalaa/yuktai)](https://www.npmjs.com/package/@yuktishaalaa/yuktai)
 [![downloads](https://img.shields.io/npm/dm/@yuktishaalaa/yuktai)](https://www.npmjs.com/package/@yuktishaalaa/yuktai)
@@ -11,7 +11,6 @@
 
 ## What's new in v2.0.0
 
-- ✅ No JAWS needed — works with NVDA, VoiceOver, TalkBack, Narrator
 - ✅ Built-in SpeechSynthesis — browser speaks on focus, zero install
 - ✅ Visual alerts — sliding banner for deaf users, no audio needed
 - ✅ Keyboard navigation — arrow keys, Escape, focus trap, no AT needed
@@ -468,7 +467,7 @@ After clicking **Apply settings**, the panel shows:
 - **Zero id attributes** — no injected node ever gets an `id`. All injected nodes tracked via module-level JavaScript references. Never collides with host app ids.
 - **Zero API keys** — runs entirely in the browser. No external calls, no telemetry, no cost.
 - **Zero framework lock-in** — `core/renderer.ts` has no framework imports. Works in Node.js, browsers, and test environments.
-- **Zero JAWS dependency** — uses standard browser APIs. Works with NVDA, VoiceOver, TalkBack, Narrator — all free.
+
 - **One engine, many adapters** — all adapters import from `core/renderer.ts`. WCAG logic written once.
 
 ---

@@ -131,7 +131,7 @@ export const WidgetPanel = forwardRef<HTMLDivElement, Props>(
               )}
             </div>
             <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Accessibility</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>WCAG 2.2 · No JAWS needed · Open Source</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>WCAG 2.2  · Open Source</p>
           </div>
           <button
             onClick={onClose}
