@@ -5,7 +5,6 @@
     "moduleResolution": "node",
     "jsx": "react-jsx",          
     "lib": ["DOM", "DOM.Iterable", "ESNext"], 
-    "ignoreDeprecations": "6.0",
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,

@@ -22,6 +22,7 @@ export type ColorBlindMode =
   | "none" | "deuteranopia" | "protanopia" | "tritanopia" | "achromatopsia"
 
 export type Severity = "critical" | "serious" | "moderate" | "minor"
+export type AlertType = "success" | "error" | "info" | "warning"
 
 export interface A11yConfig {
   enabled: boolean
@@ -53,6 +54,21 @@ export interface A11yReport {
   renderTime: number
   score: number
   details: A11yFix[]
+}
+
+
+// ─── FIX 1: Typed interfaces for preference panel options ─────────────────────
+interface PanelOption {
+  key: string
+  label: string
+  type: string
+  group?: string
+}
+
+interface PanelSection {
+  icon: string
+  title: string
+  options: PanelOption[]
 }
 
 // ─── Module-level refs — zero ids, zero host-page collisions ─────────────────
@@ -107,7 +123,7 @@ function speak(text: string, priority: "polite" | "assertive" = "polite"): void 
 // ─── Visual Alert — for deaf users, no audio dependency ──────────────────────
 function showVisualAlert(
   message: string,
-  type: "success" | "error" | "info" | "warning" = "info"
+  type: AlertType = "info"
 ): void {
   if (typeof document === "undefined") return
 
@@ -168,7 +184,7 @@ function showVisualAlert(
 // ─── Announce — aria-live + speech + visual combined ─────────────────────────
 function announce(
   message: string,
-  type: "success" | "error" | "info" | "warning" = "info",
+  type: AlertType = "info",
   useSpeech = true
 ): void {
   // 1. aria-live for screen readers
@@ -816,7 +832,7 @@ function injectPreferencePanel(config: A11yConfig): void {
     overflow:hidden;display:none;
   `
 
-  const sections = [
+  const sections: PanelSection[] = [
     {
       icon: "👁",
       title: "Vision",
@@ -915,7 +931,7 @@ function injectPreferencePanel(config: A11yConfig): void {
   panel.querySelectorAll("[data-yuktai-toggle]").forEach(el => {
     el.addEventListener("click", () => {
       const key = el.getAttribute("data-yuktai-toggle") as keyof A11yConfig
-      ;(config as Record<string, unknown>)[key] = !getConfigValue(config, key as string)
+      ;(config as unknown as Record<string, unknown>)[key] = !getConfigValue(config, key as string)
       savePreferences(config)
       applyConfigToDOM(config)
       rebuildPanel(config)
@@ -995,7 +1011,7 @@ function rebuildPanel(config: A11yConfig): void {
 }
 
 function getConfigValue(config: A11yConfig, key: string): boolean {
-  return !!(config as Record<string, unknown>)[key]
+  return !!(config as unknown as Record<string, unknown>)[key]
 }
 
 function getColorBlindSelected(config: A11yConfig, key: string): boolean {
