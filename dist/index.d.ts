@@ -38,6 +38,13 @@ interface A11yConfig {
     showSkipLinks?: boolean;
     largeTargets?: boolean;
     timeoutWarning?: number;
+    dyslexiaFont?: boolean;
+    localFont?: string;
+    plainEnglish?: boolean;
+    summarisePage?: boolean;
+    translateLanguage?: string;
+    voiceControl?: boolean;
+    smartLabels?: boolean;
 }
 interface A11yFix {
     tag: string;
@@ -56,6 +63,11 @@ declare function speak(text: string, priority?: "polite" | "assertive"): void;
 declare function showVisualAlert(message: string, type?: AlertType): void;
 declare function announce(message: string, type?: AlertType, useSpeech?: boolean): void;
 declare function trapFocus(modal: HTMLElement): void;
+declare function handlePlainEnglish(enabled: boolean): Promise<void>;
+declare function handleSummarisePage(enabled: boolean): Promise<void>;
+declare function handleTranslate(language: string): Promise<void>;
+declare function handleVoiceControl(enabled: boolean): Promise<void>;
+declare function handleSmartLabels(enabled: boolean): Promise<void>;
 declare const wcagPlugin: {
     name: string;
     version: string;
@@ -69,13 +81,23 @@ declare const wcagPlugin: {
     speak: typeof speak;
     showVisualAlert: typeof showVisualAlert;
     trapFocus: typeof trapFocus;
+    handlePlainEnglish: typeof handlePlainEnglish;
+    handleSummarisePage: typeof handleSummarisePage;
+    handleTranslate: typeof handleTranslate;
+    handleVoiceControl: typeof handleVoiceControl;
+    handleSmartLabels: typeof handleSmartLabels;
+    SUPPORTED_LANGUAGES: {
+        code: string;
+        label: string;
+    }[];
 };
 
 interface YuktAIWrapperProps {
-    children?: ReactNode;
     position?: "left" | "right";
+    children: ReactNode;
+    config?: Partial<A11yConfig>;
 }
-declare function YuktAIWrapper({ children, position }: YuktAIWrapperProps): react_jsx_runtime.JSX.Element;
+declare function YuktAIWrapper({ position, children, config: configOverrides, }: YuktAIWrapperProps): react_jsx_runtime.JSX.Element;
 
 declare const aiPlugin: {
     name: string;
@@ -104,6 +126,15 @@ declare const YuktAI: {
         speak: (text: string, priority?: "polite" | "assertive") => void;
         showVisualAlert: (message: string, type?: AlertType) => void;
         trapFocus: (modal: HTMLElement) => void;
+        handlePlainEnglish: (enabled: boolean) => Promise<void>;
+        handleSummarisePage: (enabled: boolean) => Promise<void>;
+        handleTranslate: (language: string) => Promise<void>;
+        handleVoiceControl: (enabled: boolean) => Promise<void>;
+        handleSmartLabels: (enabled: boolean) => Promise<void>;
+        SUPPORTED_LANGUAGES: {
+            code: string;
+            label: string;
+        }[];
     };
     list(): string[];
     use(name: string): Plugin | undefined;

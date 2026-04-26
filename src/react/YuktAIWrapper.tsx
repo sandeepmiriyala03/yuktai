@@ -1,266 +1,288 @@
-"use client";
-// yuktai-a11y · react/YuktAIWrapper.tsx  v2.0.0
-// import { YuktAIWrapper } from "@yuktishaalaa/yuktai";
+// ─────────────────────────────────────────────────────────────────────────────
+// src/react/YuktAIWrapper.tsx
+// yuktai v4.0.0 — Yuktishaalaa AI Lab
+//
+// Main React wrapper component.
+// Initialises the accessibility engine and all AI features.
+// Renders the WidgetPanel UI for user preference control.
+// Desktop only. Responsive panel layout.
+//
+// Usage in Next.js App Router:
+//   <YuktAIWrapper position="left">{children}</YuktAIWrapper>
+//
+// Usage in Next.js Pages Router:
+//   <YuktAIWrapper position="right">{children}</YuktAIWrapper>
+// ─────────────────────────────────────────────────────────────────────────────
+
+"use client"
 
 import React, {
-  useState, useEffect, useRef, useCallback, ReactNode,
-} from "react";
-import { wcagPlugin, A11yReport } from "../core/renderer";
-import { WidgetPanel, WidgetSettings, DEFAULT_SETTINGS } from "./WidgetPanel";
+  useEffect,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react"
 
-let _focusStyleNode:   HTMLStyleElement | null = null;
-let _dyslexiaStyleNode: HTMLStyleElement | null = null;
+import { wcagPlugin, type A11yConfig, type A11yReport } from "../core/renderer"
+import { WidgetPanel, type WidgetSettings, DEFAULT_SETTINGS } from "./WidgetPanel"
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Props
+// ─────────────────────────────────────────────────────────────────────────────
 export interface YuktAIWrapperProps {
-  children?: ReactNode;
-  position?: "left" | "right"; // default: "left"
+  // Which side the floating button appears on
+  position?: "left" | "right"
+
+  // Your app content
+  children:  ReactNode
+
+  // Optional — override default config
+  config?:   Partial<A11yConfig>
 }
 
-export function YuktAIWrapper({ children, position = "left" }: YuktAIWrapperProps) {
-  const [mounted,  setMounted]  = useState(false);
-  const [open,     setOpen]     = useState(false);
-  const [settings, setSettings] = useState<WidgetSettings>(DEFAULT_SETTINGS);
-  const [report,   setReport]   = useState<A11yReport | null>(null);
-  const [isActive, setIsActive] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const fabRef   = useRef<HTMLButtonElement>(null);
+// ─────────────────────────────────────────────────────────────────────────────
+// YuktAIWrapper
+// Top-level component — wrap your entire app with this.
+// Handles engine init, AI support detection, panel open/close.
+// ─────────────────────────────────────────────────────────────────────────────
+export function YuktAIWrapper({
+  position = "left",
+  children,
+  config: configOverrides = {},
+}: YuktAIWrapperProps) {
 
-  useEffect(() => setMounted(true), []);
+  // ── Panel open/close state ──
+  const [panelOpen, setPanelOpen] = useState(false)
 
-  // Global focus ring — WCAG 2.4.11 minimum size
+  // ── Current widget settings — synced with localStorage ──
+  const [settings, setSettings] = useState<WidgetSettings>(DEFAULT_SETTINGS)
+
+  // ── Last audit report — shown in panel ──
+  const [report, setReport] = useState<A11yReport | null>(null)
+
+  // ── Whether the engine has been applied ──
+  const [isActive, setIsActive] = useState(false)
+
+  // ── AI feature support flags — detected on mount ──
+  const [aiSupported, setAiSupported] = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+
+  // ── Panel ref — used for focus trap on open ──
+  const panelRef = React.useRef<HTMLDivElement>(null)
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Detect browser AI support on mount
+  // Chrome 127+ has window.ai — older browsers do not
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (_focusStyleNode) return;
-    const s = document.createElement("style");
-    s.innerHTML = `
-      *:focus-visible {
-        outline: 3px solid #0d9488 !important;
-        outline-offset: 3px !important;
-        box-shadow: 0 0 0 6px rgba(13,148,136,.2) !important;
-        border-radius: 2px !important;
-      }
-      *:focus:not(:focus-visible) {
-        outline: none !important;
-      }
-    `;
-    document.head.appendChild(s);
-    _focusStyleNode = s;
-    return () => { _focusStyleNode?.remove(); _focusStyleNode = null; };
-  }, []);
+    if (typeof window === "undefined") return
 
-  // Cleanup on unmount
-  useEffect(() => () => {
-    wcagPlugin.stopObserver();
-    // FIX 1: removed removeLiveRegion / removeColorBlindSvg — handled internally in v2.0.0
-  }, []);
+    // Check Chrome Built-in AI
+    const hasAI = !!(window as unknown as Record<string, unknown>).ai
+    setAiSupported(hasAI)
 
-  // Outside click — FIX 8: announce panel closed
+    // Check SpeechRecognition for voice control
+    const hasVoice = !!(
+      (window as unknown as Record<string, unknown>).SpeechRecognition ||
+      (window as unknown as Record<string, unknown>).webkitSpeechRecognition
+    )
+    setVoiceSupported(hasVoice)
+  }, [])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Load saved preferences from localStorage on mount
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!open) return;
-    const fn = (e: MouseEvent) => {
-      if (
-        panelRef.current && !panelRef.current.contains(e.target as Node) &&
-        fabRef.current   && !fabRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-        fabRef.current?.focus();
-        wcagPlugin.announce("Accessibility panel closed", "info", false);
+    if (typeof window === "undefined") return
+    try {
+      const saved = localStorage.getItem("yuktai-a11y-prefs")
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<WidgetSettings>
+        setSettings(prev => ({ ...prev, ...parsed }))
       }
-    };
-    document.addEventListener("mousedown", fn);
-    return () => document.removeEventListener("mousedown", fn);
-  }, [open]);
+    } catch {
+      // localStorage not available — ignore
+    }
+  }, [])
 
-  // Escape key
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) {
-        setOpen(false);
-        fabRef.current?.focus();
-        wcagPlugin.announce("Accessibility panel closed", "info", false);
-      }
-    };
-    document.addEventListener("keydown", fn);
-    return () => document.removeEventListener("keydown", fn);
-  }, [open]);
-
-  const set = <K extends keyof WidgetSettings>(key: K, val: WidgetSettings[K]) =>
-    setSettings((p) => ({ ...p, [key]: val }));
-
-  // FIX 2: execute() once only — no double applyFixes
-  // FIX 3: full config including new v2.0.0 fields
-  // FIX 4: colorBlindMode passed correctly
-  const applySettings = useCallback(async () => {
-    const cfg = {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Run the accessibility engine whenever settings change
+  // ─────────────────────────────────────────────────────────────────────────
+  const runEngine = useCallback(async (current: WidgetSettings) => {
+    // Build config from current settings
+    const config: A11yConfig = {
       enabled:             true,
-      highContrast:        settings.highContrast,
-      darkMode:            settings.darkMode       ?? false,
-      reduceMotion:        settings.reduceMotion,
-      autoFix:             settings.autoFix,
-      largeTargets:        settings.largeTargets   ?? false,
-      speechEnabled:       settings.speechEnabled  ?? false,
-      colorBlindMode:      settings.colorBlindMode ?? "none",
-      showPreferencePanel: false, // panel is in wrapper itself
+      highContrast:        current.highContrast,
+      darkMode:            current.darkMode,
+      reduceMotion:        current.reduceMotion,
+      largeTargets:        current.largeTargets,
+      speechEnabled:       current.speechEnabled,
+      autoFix:             current.autoFix,
+      dyslexiaFont:        current.dyslexiaFont,
+      localFont:           current.localFont,
+      fontSizeMultiplier:  current.fontScale / 100,
+      colorBlindMode:      current.colorBlindMode,
+      showAuditBadge:      current.showAuditBadge,
       showSkipLinks:       true,
-      showAuditBadge:      settings.showAuditBadge ?? false,
-      timeoutWarning:      settings.timeoutWarning ?? undefined,
-    };
-
-    const msg = await wcagPlugin.execute(cfg);
-    console.log("[yuktai-a11y]", msg);
-
-    // FIX 2: get report from applyFixes once — execute already ran it
-    const r = wcagPlugin.applyFixes(cfg);
-    setReport(r);
-
-    // FIX 5: cap font scale — use rem multiplier not raw %
-    const scale = Math.min(Math.max(settings.fontScale ?? 100, 80), 130);
-    document.documentElement.style.fontSize = `${scale}%`;
-
-    // FIX 6: use Atkinson Hyperlegible — actually dyslexia-friendly
-    if (settings.dyslexiaFont) {
-      if (!_dyslexiaStyleNode) {
-        // Load Atkinson Hyperlegible from Google Fonts
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap";
-        document.head.appendChild(link);
-
-        const s = document.createElement("style");
-        s.textContent = `
-          body, body * {
-            font-family: 'Atkinson Hyperlegible', Arial, sans-serif !important;
-            letter-spacing: 0.05em !important;
-            word-spacing: 0.1em !important;
-            line-height: 1.8 !important;
-          }
-        `;
-        document.head.appendChild(s);
-        _dyslexiaStyleNode = s;
-      }
-    } else {
-      _dyslexiaStyleNode?.remove();
-      _dyslexiaStyleNode = null;
+      showPreferencePanel: false, // panel handled by React — not the engine
+      plainEnglish:        current.plainEnglish,
+      summarisePage:       current.summarisePage,
+      translateLanguage:   current.translateLanguage,
+      voiceControl:        current.voiceControl,
+      smartLabels:         current.smartLabels,
+      ...configOverrides,
     }
 
-    setIsActive(true);
-    setOpen(false);
-    wcagPlugin.announce(
-      `Accessibility active. ${r.fixed} fixes applied. Score: ${r.score}/100.`,
-      "success"
-    );
-  }, [settings]);
+    // Run fixes and get report
+    await wcagPlugin.execute(config)
+    const freshReport = wcagPlugin.applyFixes(config)
+    setReport(freshReport)
+    setIsActive(true)
+  }, [configOverrides])
 
-  const resetSettings = useCallback(async () => {
-    await wcagPlugin.execute({ enabled: false });
-    document.documentElement.style.fontSize = "";
-    _dyslexiaStyleNode?.remove();
-    _dyslexiaStyleNode = null;
-    document.querySelectorAll<HTMLElement>("*").forEach((h) => {
-      h.style.filter = "";
-      h.style.transition = "";
-      h.style.animation = "";
-    });
-    setSettings(DEFAULT_SETTINGS);
-    setReport(null);
-    setIsActive(false);
-    wcagPlugin.announce("Accessibility reset to default.", "info");
-  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
+  // Apply settings — called from panel Apply button
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleApply = useCallback(async () => {
+    // Save to localStorage
+    try {
+      localStorage.setItem("yuktai-a11y-prefs", JSON.stringify(settings))
+    } catch {
+      // ignore
+    }
 
-  if (!mounted) return <>{children}</>;
+    // Run engine with new settings
+    await runEngine(settings)
+    setPanelOpen(false)
+  }, [settings, runEngine])
 
-  const side = position === "left" ? { left: 24 } : { right: 24 };
+  // ─────────────────────────────────────────────────────────────────────────
+  // Reset — restore all defaults
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleReset = useCallback(() => {
+    setSettings(DEFAULT_SETTINGS)
+    try {
+      localStorage.removeItem("yuktai-a11y-prefs")
+    } catch {
+      // ignore
+    }
 
-  // FIX 7: aria-label includes active state
-  const fabLabel = isActive
-    ? "Accessibility options — currently active. Click to change settings."
-    : "Open accessibility options";
+    // Remove all DOM attributes applied by engine
+    const root = document.documentElement
+    const attrs = [
+      "data-yuktai-high-contrast",
+      "data-yuktai-dark",
+      "data-yuktai-reduce-motion",
+      "data-yuktai-large-targets",
+      "data-yuktai-keyboard",
+      "data-yuktai-dyslexia",
+    ]
+    attrs.forEach(attr => root.removeAttribute(attr))
+    document.body.style.filter     = ""
+    document.body.style.fontFamily = ""
+    document.documentElement.style.fontSize = ""
 
+    setReport(null)
+    setIsActive(false)
+  }, [])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Update a single setting
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleSet = useCallback(<K extends keyof WidgetSettings>(
+    key: K,
+    val: WidgetSettings[K]
+  ) => {
+    setSettings(prev => ({ ...prev, [key]: val }))
+  }, [])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Keyboard — Escape closes panel
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && panelOpen) {
+        setPanelOpen(false)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [panelOpen])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Focus trap — when panel opens, keep focus inside
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (panelOpen && panelRef.current) {
+      wcagPlugin.trapFocus(panelRef.current)
+    }
+  }, [panelOpen])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // FAB button position — left or right
+  // ─────────────────────────────────────────────────────────────────────────
+  const fabStyle: React.CSSProperties = {
+    position:     "fixed",
+    bottom:       "24px",
+    [position]:   "24px",
+    zIndex:       9998,
+    width:        "52px",
+    height:       "52px",
+    borderRadius: "50%",
+    background:   isActive ? "#0d9488" : "#1a73e8",
+    color:        "#fff",
+    border:       "none",
+    cursor:       "pointer",
+    fontSize:     "22px",
+    display:      "flex",
+    alignItems:   "center",
+    justifyContent: "center",
+    boxShadow:    "0 4px 16px rgba(0,0,0,0.25)",
+    transition:   "transform 0.15s, background 0.2s",
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
+      {/* App content — untouched */}
       {children}
 
-      {/* FAB button */}
+      {/* Floating accessibility button */}
       <button
-        ref={fabRef}
-        onClick={() => {
-          const next = !open;
-          setOpen(next);
-          if (next) wcagPlugin.announce("Accessibility panel opened", "info", false);
-        }}
-        aria-label={fabLabel}
-        aria-expanded={open}
+        style={fabStyle}
+        aria-label="Open accessibility preferences"
         aria-haspopup="dialog"
-        style={{
-          position:      "fixed",
-          bottom:        24,
-          ...side,
-          width:         52,
-          height:        52,
-          borderRadius:  "50%",
-          background:    isActive ? "#0f766e" : "#0d9488",
-          border:        "none",
-          cursor:        "pointer",
-          display:       "flex",
-          alignItems:    "center",
-          justifyContent:"center",
-          boxShadow:     "0 4px 14px rgba(0,0,0,0.18)",
-          zIndex:        9999,
-          transition:    "background 0.2s, transform 0.15s",
-          outline:       "none",
+        aria-expanded={panelOpen}
+        data-yuktai-pref-toggle="true"
+        onClick={() => setPanelOpen(prev => !prev)}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-        onFocus={(e)      => (e.currentTarget.style.boxShadow = "0 0 0 4px rgba(13,148,136,0.45)")}
-        onBlur={(e)       => (e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.18)")}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"
+        }}
       >
-        {/* Accessibility icon */}
-        <svg
-          viewBox="0 0 24 24"
-          style={{ width: 26, height: 26, fill: "#fff" }}
-          aria-hidden="true"
-          focusable="false"
-        >
-          <path d="M12 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 4.5l-5-.5-2-.2V5l-4 .5-4-.5v.8L4 6.5 3 7l1 3 4-.5v2.3L6 17h2l2-4.5L12 14l2 2.5L16 17h2l-2-4.2V9.5l4 .5 1-3z" />
-        </svg>
-
-        {/* Active indicator dot */}
-        {isActive && (
-          <span
-            aria-hidden="true"
-            style={{
-              position:     "absolute",
-              top:          4,
-              right:        4,
-              width:        10,
-              height:       10,
-              borderRadius: "50%",
-              background:   "#5eead4",
-              border:       "2px solid #fff",
-            }}
-          />
-        )}
+        ♿
       </button>
 
-      {/* Widget panel */}
-      {open && (
+      {/* Preference panel — only rendered when open */}
+      {panelOpen && (
         <WidgetPanel
           ref={panelRef}
           position={position}
           settings={settings}
           report={report}
           isActive={isActive}
-          set={set}
-          onApply={applySettings}
-          onReset={resetSettings}
-          onClose={() => {
-            setOpen(false);
-            fabRef.current?.focus();
-            wcagPlugin.announce("Accessibility panel closed", "info", false);
-          }}
+          aiSupported={aiSupported}
+          voiceSupported={voiceSupported}
+          set={handleSet}
+          onApply={handleApply}
+          onReset={handleReset}
+          onClose={() => setPanelOpen(false)}
         />
       )}
     </>
-  );
+  )
 }
-
-export default YuktAIWrapper;
