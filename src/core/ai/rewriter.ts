@@ -1,108 +1,107 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/rewriter.ts
-// yuktai v4.0.0 — Yuktishaalaa AI Lab
+// yuktai v2.0.19 — Yuktishaalaa AI Lab
 //
 // Plain English mode — rewrites complex page text into simple language.
-// Uses Chrome Built-in AI (window.ai.rewriter) — Gemini Nano on device.
+//
+// Chrome 147+ uses standalone globals: window.Rewriter
+// Chrome 127–146 used: window.ai.rewriter
+// This file handles both automatically.
+//
 // Zero API keys. Zero cost. No data leaves the browser.
-// Desktop only. Chrome 127+ required.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ── Types for Chrome Built-in AI Rewriter API
-// These are not in TypeScript's default lib yet — so we declare them here
-declare global {
-  interface Window {
-    ai?: {
-      rewriter?: {
-        create: (options?: RewriterOptions) => Promise<Rewriter>;
-        capabilities: () => Promise<{ available: "readily" | "after-download" | "no" }>;
-      };
-    };
-  }
-}
-
-interface RewriterOptions {
-  // How simple the output should be
-  tone?: "as-is" | "more-formal" | "more-casual";
-  // Target reading level
-  format?: "as-is" | "plain-text" | "markdown";
-  // Target length
-  length?: "as-is" | "shorter" | "longer";
-}
-
-interface Rewriter {
-  rewrite: (text: string, options?: { context?: string }) => Promise<string>;
-  destroy: () => void;
-}
 
 // ── Result returned to the caller
 export interface RewriteResult {
-  success:  boolean;
-  original: string;
-  rewritten: string;
-  error?:   string;
+  success:   boolean
+  original:  string
+  rewritten: string
+  error?:    string
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getRewriterAPI
+// Returns the Rewriter API regardless of Chrome version.
+// Chrome 147+: window.Rewriter
+// Chrome 127–146: window.ai.rewriter
+// ─────────────────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getRewriterAPI(): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any
+  return w.Rewriter || w.ai?.rewriter || null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // checkRewriterSupport
 // Returns true if Chrome Built-in AI Rewriter is available on this device.
-// Call this before enabling the Plain English toggle in the UI.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function checkRewriterSupport(): Promise<boolean> {
   try {
-    // Check if the API exists in this browser
-    if (!window.ai?.rewriter) return false;
+    const API = getRewriterAPI()
+    if (!API) return false
 
-    // Check if Gemini Nano is ready on this device
-    const capabilities = await window.ai.rewriter.capabilities();
-    return capabilities.available !== "no";
+    // Chrome 147+ uses availability()
+    if (typeof API.availability === "function") {
+      const status = await API.availability()
+      return status === "readily" || status === "available" || status === "downloadable"
+    }
+
+    // Chrome 127–146 uses capabilities()
+    if (typeof API.capabilities === "function") {
+      const caps = await API.capabilities()
+      return caps?.available !== "no"
+    }
+
+    // Fallback — API exists, assume supported
+    return typeof API.create === "function"
 
   } catch {
-    // API not available — fail silently
-    return false;
+    return false
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // rewriteText
 // Takes a single string and rewrites it in plain simple English.
-// Used by the Plain English mode toggle in WidgetPanel.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function rewriteText(text: string): Promise<RewriteResult> {
-  // Don't process empty or very short text
   if (!text || text.trim().length < 20) {
-    return { success: false, original: text, rewritten: text, error: "Text too short" };
+    return { success: false, original: text, rewritten: text, error: "Text too short" }
   }
 
   try {
-    // Create a rewriter session with plain English settings
-    const rewriter = await window.ai!.rewriter!.create({
-      tone:   "more-casual",   // Friendly and approachable
-      format: "plain-text",    // No markdown — clean output
-      length: "as-is",         // Keep roughly the same length
-    });
+    const API = getRewriterAPI()
+    if (!API) throw new Error("Rewriter API not available")
 
-    // Rewrite the text with accessibility context
+    // Create rewriter session
+    // outputLanguage required in Chrome 147+
+    const rewriter = await API.create({
+      tone:           "more-casual",
+      format:         "plain-text",
+      length:         "as-is",
+      outputLanguage: "en",
+    })
+
     const rewritten = await rewriter.rewrite(text, {
       context: "Rewrite this text in simple plain English. Use short sentences. Avoid jargon. Make it easy to understand for everyone.",
-    });
+    })
 
-    // Clean up the session to free memory
-    rewriter.destroy();
+    rewriter.destroy()
 
     return {
-      success:  true,
-      original: text,
+      success:   true,
+      original:  text,
       rewritten: rewritten.trim(),
-    };
+    }
 
   } catch (error) {
     return {
-      success:  false,
-      original: text,
+      success:   false,
+      original:  text,
       rewritten: text,
-      error:    error instanceof Error ? error.message : "Rewrite failed",
-    };
+      error:     error instanceof Error ? error.message : "Rewrite failed",
+    }
   }
 }
 
@@ -113,42 +112,33 @@ export async function rewriteText(text: string): Promise<RewriteResult> {
 // Only rewrites text — never changes structure, links, or ARIA attributes.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function rewritePage(): Promise<{ fixed: number; error?: string }> {
-  // Check support first
-  const supported = await checkRewriterSupport();
+  const supported = await checkRewriterSupport()
   if (!supported) {
-    return { fixed: 0, error: "Chrome Built-in AI not available on this device. Chrome 127+ required." };
+    return { fixed: 0, error: "Chrome Built-in AI Rewriter not available. Enable via chrome://flags." }
   }
 
-  // Select all readable text elements on the page
-  // We only touch visible text — not inputs, buttons, or ARIA attributes
   const textElements = document.querySelectorAll<HTMLElement>(
     "p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, label, figcaption"
-  );
+  )
 
-  let fixed = 0;
+  let fixed = 0
 
   for (const el of textElements) {
-    const original = el.innerText?.trim();
+    const original = el.innerText?.trim()
 
-    // Skip empty elements and very short text
-    if (!original || original.length < 20) continue;
+    if (!original || original.length < 20) continue
+    if (el.closest("[data-yuktai-panel]")) continue
 
-    // Skip elements that are already inside yuktai's own panel
-    if (el.closest("[data-yuktai-panel]")) continue;
-
-    const result = await rewriteText(original);
+    const result = await rewriteText(original)
 
     if (result.success && result.rewritten !== original) {
-      // Store original text so we can restore it later
-      el.dataset.yuktaiOriginal = original;
-
-      // Replace with plain English version
-      el.innerText = result.rewritten;
-      fixed++;
+      el.dataset.yuktaiOriginal = original
+      el.innerText = result.rewritten
+      fixed++
     }
   }
 
-  return { fixed };
+  return { fixed }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,13 +146,12 @@ export async function rewritePage(): Promise<{ fixed: number; error?: string }> 
 // Restores all original text when user turns off Plain English mode.
 // ─────────────────────────────────────────────────────────────────────────────
 export function restorePage(): void {
-  const rewritten = document.querySelectorAll<HTMLElement>("[data-yuktai-original]");
-
+  const rewritten = document.querySelectorAll<HTMLElement>("[data-yuktai-original]")
   for (const el of rewritten) {
-    const original = el.dataset.yuktaiOriginal;
+    const original = el.dataset.yuktaiOriginal
     if (original) {
-      el.innerText = original;
-      delete el.dataset.yuktaiOriginal;
+      el.innerText = original
+      delete el.dataset.yuktaiOriginal
     }
   }
 }
