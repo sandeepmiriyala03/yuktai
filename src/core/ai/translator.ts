@@ -1,88 +1,145 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/translator.ts
-// yuktai v4.0.0 — Yuktishaalaa AI Lab
+// yuktai v2.0.19 — Yuktishaalaa AI Lab
 //
 // Page translation — translates all visible page text into chosen language.
-// Uses Chrome Built-in AI (window.translation) — Gemini Nano on device.
+//
+// Chrome 147+ uses standalone globals: window.Translator
+// Chrome 127–146 used: window.translation
+// This file handles both automatically.
+//
 // Zero API keys. Zero cost. No data leaves the browser.
-// Desktop only. Chrome 127+ required.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Types for Chrome Built-in AI Translation API
-declare global {
-  interface Window {
-    translation?: {
-      createTranslator: (options: TranslatorOptions) => Promise<Translator>;
-      canTranslate: (options: TranslatorOptions) => Promise<"readily" | "after-download" | "no">;
-    };
-  }
-}
-
-interface TranslatorOptions {
-  sourceLanguage: string; // e.g. "en"
-  targetLanguage: string; // e.g. "hi"
-}
-
-interface Translator {
-  translate: (text: string) => Promise<string>;
-  destroy:   () => void;
-}
-
-// ── Supported languages in yuktai v4.0.0
-// These are the languages Chrome Built-in AI supports today
+// ── Supported languages in yuktai v2.0.19
 export const SUPPORTED_LANGUAGES: { code: string; label: string }[] = [
-  { code: "en", label: "English"    },
-  { code: "hi", label: "Hindi"      },
-  { code: "es", label: "Spanish"    },
-  { code: "fr", label: "French"     },
-  { code: "de", label: "German"     },
-  { code: "it", label: "Italian"    },
-  { code: "pt", label: "Portuguese" },
-  { code: "nl", label: "Dutch"      },
-  { code: "pl", label: "Polish"     },
-  { code: "ru", label: "Russian"    },
-  { code: "ja", label: "Japanese"   },
-  { code: "ko", label: "Korean"     },
-  { code: "zh", label: "Chinese"    },
-  { code: "ar", label: "Arabic"     },
-  { code: "tr", label: "Turkish"    },
-  { code: "vi", label: "Vietnamese" },
-  { code: "bn", label: "Bengali"    },
-  { code: "id", label: "Indonesian" },
-];
+  { code: "en", label: "English"     },
+  { code: "hi", label: "Hindi"       },
+  { code: "es", label: "Spanish"     },
+  { code: "fr", label: "French"      },
+  { code: "de", label: "German"      },
+  { code: "it", label: "Italian"     },
+  { code: "pt", label: "Portuguese"  },
+  { code: "nl", label: "Dutch"       },
+  { code: "pl", label: "Polish"      },
+  { code: "ru", label: "Russian"     },
+  { code: "ja", label: "Japanese"    },
+  { code: "ko", label: "Korean"      },
+  { code: "zh", label: "Chinese"     },
+  { code: "ar", label: "Arabic"      },
+  { code: "tr", label: "Turkish"     },
+  { code: "vi", label: "Vietnamese"  },
+  { code: "bn", label: "Bengali"     },
+  { code: "id", label: "Indonesian"  },
+]
 
 // ── Result returned to the caller
 export interface TranslateResult {
-  success:  boolean;
-  language: string;
-  fixed:    number;
-  error?:   string;
+  success:  boolean
+  language: string
+  fixed:    number
+  error?:   string
 }
 
 // ── Track current language so we can restore original
-let currentLanguage = "en";
+let currentLanguage = "en"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getTranslatorAPI
+// Returns the Translator API regardless of Chrome version.
+//
+// Chrome 147+ uses: window.Translator
+// Chrome 127–146 used: window.translation
+// ─────────────────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getTranslatorAPI(): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any
+  return w.Translator || w.translation || null
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // checkTranslatorSupport
 // Returns true if Chrome Built-in AI Translation is available.
-// Call this before showing the language picker in the UI.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function checkTranslatorSupport(
   targetLanguage: string
 ): Promise<boolean> {
   try {
-    if (!window.translation) return false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w      = window as any
+    const API    = getTranslatorAPI()
+    if (!API) return false
 
-    const result = await window.translation.canTranslate({
-      sourceLanguage: "en",
-      targetLanguage,
-    });
+    // Chrome 147+ — window.Translator.availability()
+    if (w.Translator && typeof w.Translator.availability === "function") {
+      try {
+        const status = await w.Translator.availability({
+          sourceLanguage: "en",
+          targetLanguage,
+        })
+        return (
+          status === "readily"      ||
+          status === "available"    ||
+          status === "downloadable" ||
+          status === "after-download"
+        )
+      } catch { /* try next */ }
+    }
 
-    return result !== "no";
+    // Chrome 147+ — window.Translator.canTranslate() fallback
+    if (w.Translator && typeof w.Translator.canTranslate === "function") {
+      const result = await w.Translator.canTranslate({
+        sourceLanguage: "en",
+        targetLanguage,
+      })
+      return result !== "no"
+    }
+
+    // Chrome 127–146 — window.translation.canTranslate()
+    if (w.translation && typeof w.translation.canTranslate === "function") {
+      const result = await w.translation.canTranslate({
+        sourceLanguage: "en",
+        targetLanguage,
+      })
+      return result !== "no"
+    }
+
+    return false
 
   } catch {
-    return false;
+    return false
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createTranslator
+// Creates a translator session for the given language pair.
+// Handles both Chrome 147+ and Chrome 127–146 API shapes.
+// ─────────────────────────────────────────────────────────────────────────────
+async function createTranslator(
+  targetLanguage: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any
+
+  const options = {
+    sourceLanguage: "en",
+    targetLanguage,
+  }
+
+  // Chrome 147+ — window.Translator.create()
+  if (w.Translator && typeof w.Translator.create === "function") {
+    return await w.Translator.create(options)
+  }
+
+  // Chrome 127–146 — window.translation.createTranslator()
+  if (w.translation && typeof w.translation.createTranslator === "function") {
+    return await w.translation.createTranslator(options)
+  }
+
+  throw new Error("Translation API not available")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,74 +152,68 @@ export async function translatePage(
   targetLanguage: string
 ): Promise<TranslateResult> {
 
-  // If already in this language — do nothing
+  // Already in this language — do nothing
   if (targetLanguage === currentLanguage) {
-    return { success: true, language: targetLanguage, fixed: 0 };
+    return { success: true, language: targetLanguage, fixed: 0 }
   }
 
-  // If switching back to English — restore originals
+  // Switching back to English — restore originals
   if (targetLanguage === "en") {
-    restoreOriginalText();
-    currentLanguage = "en";
-    return { success: true, language: "en", fixed: 0 };
+    restoreOriginalText()
+    currentLanguage = "en"
+    return { success: true, language: "en", fixed: 0 }
   }
 
   // Check if translation is supported for this language
-  const supported = await checkTranslatorSupport(targetLanguage);
+  const supported = await checkTranslatorSupport(targetLanguage)
   if (!supported) {
     return {
       success:  false,
       language: targetLanguage,
       fixed:    0,
-      error:    `Translation to ${targetLanguage} not available. Chrome 127+ required.`,
-    };
+      error:    `Translation to ${targetLanguage} not available. Enable via chrome://flags.`,
+    }
   }
 
   try {
-    // Create translator session
-    const translator = await window.translation!.createTranslator({
-      sourceLanguage: "en",
-      targetLanguage,
-    });
+    const translator = await createTranslator(targetLanguage)
 
     // Find all translatable text elements
     const elements = document.querySelectorAll<HTMLElement>(
       "p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, label, figcaption, span, a"
-    );
+    )
 
-    let fixed = 0;
+    let fixed = 0
 
     for (const el of elements) {
       // Skip yuktai's own panel
-      if (el.closest("[data-yuktai-panel]")) continue;
+      if (el.closest("[data-yuktai-panel]")) continue
 
-      // Skip elements with child elements — only translate leaf text nodes
-      if (el.children.length > 0) continue;
+      // Only translate leaf text nodes — skip elements with child elements
+      if (el.children.length > 0) continue
 
-      const original = el.innerText?.trim();
-      if (!original || original.length < 2) continue;
+      const original = el.innerText?.trim()
+      if (!original || original.length < 2) continue
 
       // Store original text for restoration
       if (!el.dataset.yuktaiTranslationOriginal) {
-        el.dataset.yuktaiTranslationOriginal = original;
+        el.dataset.yuktaiTranslationOriginal = original
       }
 
-      // Translate
-      const translated = await translator.translate(original);
+      // Translate using the session
+      const translated = await translator.translate(original)
 
       if (translated && translated !== original) {
-        el.innerText = translated;
-        fixed++;
+        el.innerText = translated
+        fixed++
       }
     }
 
     // Clean up session
-    translator.destroy();
+    if (typeof translator.destroy === "function") translator.destroy()
 
-    // Update current language
-    currentLanguage = targetLanguage;
-
-    return { success: true, language: targetLanguage, fixed };
+    currentLanguage = targetLanguage
+    return { success: true, language: targetLanguage, fixed }
 
   } catch (error) {
     return {
@@ -170,7 +221,7 @@ export async function translatePage(
       language: targetLanguage,
       fixed:    0,
       error:    error instanceof Error ? error.message : "Translation failed",
-    };
+    }
   }
 }
 
@@ -181,24 +232,21 @@ export async function translatePage(
 export function restoreOriginalText(): void {
   const translated = document.querySelectorAll<HTMLElement>(
     "[data-yuktai-translation-original]"
-  );
-
+  )
   for (const el of translated) {
-    const original = el.dataset.yuktaiTranslationOriginal;
+    const original = el.dataset.yuktaiTranslationOriginal
     if (original) {
-      el.innerText = original;
-      delete el.dataset.yuktaiTranslationOriginal;
+      el.innerText = original
+      delete el.dataset.yuktaiTranslationOriginal
     }
   }
-
-  currentLanguage = "en";
+  currentLanguage = "en"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // getCurrentLanguage
 // Returns the currently active language code.
-// Used by the panel to show which language is selected.
 // ─────────────────────────────────────────────────────────────────────────────
 export function getCurrentLanguage(): string {
-  return currentLanguage;
+  return currentLanguage
 }
