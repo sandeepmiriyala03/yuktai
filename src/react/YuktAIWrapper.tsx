@@ -1,11 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/react/YuktAIWrapper.tsx
-// yuktai v4.0.0 — Yuktishaalaa AI Lab
+// yuktai v2.0.18 — Yuktishaalaa AI Lab
 //
 // Main React wrapper component.
 // Initialises the accessibility engine and all AI features.
 // Renders the WidgetPanel UI for user preference control.
-// Desktop only. Responsive panel layout.
+// Responsive panel layout — desktop, tablet, mobile.
+//
+// AI detection — works across Chrome 127 through 147+
+// Checks all known window.ai API shapes across Chrome versions.
 //
 // Usage in Next.js App Router:
 //   <YuktAIWrapper position="left">{children}</YuktAIWrapper>
@@ -41,6 +44,99 @@ export interface YuktAIWrapperProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// detectAISupport
+// Checks all known Chrome Built-in AI API shapes across versions.
+//
+// Chrome 127–134: window.ai.summarizer / rewriter / writer with capabilities()
+// Chrome 135–146: window.ai.languageModel with capabilities()
+// Chrome 147+:    window.ai.languageModel with availability()
+// Fallback:       globalThis.ai, window.translation
+//
+// Returns true if ANY AI capability is detected and available.
+// ─────────────────────────────────────────────────────────────────────────────
+async function detectAISupport(): Promise<boolean> {
+  try {
+    if (typeof window === "undefined") return false
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ai = (window as any).ai || (globalThis as any).ai
+
+    // No AI object — flags not enabled
+    if (!ai) return false
+
+    // ── Check 1: Chrome 147+ — languageModel.availability()
+    if (ai.languageModel?.availability) {
+      try {
+        const status = await ai.languageModel.availability()
+        if (
+          status === "readily"     ||
+          status === "downloadable" ||
+          status === "available"
+        ) return true
+      } catch { /* try next */ }
+    }
+
+    // ── Check 2: Chrome 135–146 — languageModel.capabilities()
+    if (ai.languageModel?.capabilities) {
+      try {
+        const caps = await ai.languageModel.capabilities()
+        if (
+          caps?.available === "readily" ||
+          caps?.available === "after-download"
+        ) return true
+      } catch { /* try next */ }
+    }
+
+    // ── Check 3: Chrome 135+ — languageModel.create exists
+    if (ai.languageModel && typeof ai.languageModel.create === "function") {
+      return true
+    }
+
+    // ── Check 4: Chrome 127–134 — summarizer API
+    if (ai.summarizer?.capabilities) {
+      try {
+        const caps = await ai.summarizer.capabilities()
+        if (caps?.available !== "no") return true
+      } catch { /* try next */ }
+    }
+
+    // ── Check 5: Chrome 127–134 — rewriter API
+    if (ai.rewriter?.capabilities) {
+      try {
+        const caps = await ai.rewriter.capabilities()
+        if (caps?.available !== "no") return true
+      } catch { /* try next */ }
+    }
+
+    // ── Check 6: Chrome 127–134 — writer API
+    if (ai.writer?.capabilities) {
+      try {
+        const caps = await ai.writer.capabilities()
+        if (caps?.available !== "no") return true
+      } catch { /* try next */ }
+    }
+
+    // ── Check 7: Translation API — separate from window.ai
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).translation?.canTranslate) return true
+
+    // ── Check 8: Loose check — any known sub-API exists
+    if (
+      ai.summarizer  ||
+      ai.rewriter    ||
+      ai.writer      ||
+      ai.languageModel ||
+      ai.translator
+    ) return true
+
+    return false
+
+  } catch {
+    return false
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // YuktAIWrapper
 // Top-level component — wrap your entire app with this.
 // Handles engine init, AI support detection, panel open/close.
@@ -51,63 +147,51 @@ export function YuktAIWrapper({
   config: configOverrides = {},
 }: YuktAIWrapperProps) {
 
-  // ── Panel open/close state ──
-  const [panelOpen, setPanelOpen] = useState(false)
-
-  // ── Current widget settings — synced with localStorage ──
-  const [settings, setSettings] = useState<WidgetSettings>(DEFAULT_SETTINGS)
-
-  // ── Last audit report — shown in panel ──
-  const [report, setReport] = useState<A11yReport | null>(null)
-
-  // ── Whether the engine has been applied ──
-  const [isActive, setIsActive] = useState(false)
-
-  // ── AI feature support flags — detected on mount ──
-  const [aiSupported, setAiSupported] = useState(false)
+  const [panelOpen, setPanelOpen]           = useState(false)
+  const [settings, setSettings]             = useState<WidgetSettings>(DEFAULT_SETTINGS)
+  const [report, setReport]                 = useState<A11yReport | null>(null)
+  const [isActive, setIsActive]             = useState(false)
+  const [aiSupported, setAiSupported]       = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
+  const panelRef                            = React.useRef<HTMLDivElement>(null)
 
-  // ── Panel ref — used for focus trap on open ──
-  const panelRef = React.useRef<HTMLDivElement>(null)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Detect AI and voice support on mount
+  // 500ms delay — Chrome needs time to initialise window.ai after page load
+  // Without this delay, window.ai is often undefined even when flags enabled
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return
 
- // ─────────────────────────────────────────────────────────────────────────
-// Detect browser AI support on mount — 2026 Optimized
-// ─────────────────────────────────────────────────────────────────────────
-useEffect(() => {
-  if (typeof window === "undefined") return;
+    const run = async () => {
+      const supported = await detectAISupport()
+      setAiSupported(supported)
 
-  const checkSupport = async () => {
-    // 1. Check for the AI object (handling window.ai or global ai)
-    const aiEngine = (window as any).ai || (globalThis as any).ai;
-    
-    if (aiEngine && aiEngine.languageModel) {
-      try {
-        // In 2026, we MUST check availability to "wake up" the engine
-        const status = await aiEngine.languageModel.availability();
-        
-        // If it's 'readily' or 'downloadable', we count it as supported
-        if (status === "readily" || status === "downloadable") {
-          setAiSupported(true);
-          console.log("yuktai: AI Engine ready.");
-        }
-      } catch (e) {
-        console.error("yuktai: AI check failed", e);
-        setAiSupported(false);
+      // Log to console so developer can verify detection
+      if (supported) {
+        console.log("yuktai: Chrome Built-in AI detected ✅")
+      } else {
+        console.log(
+          "yuktai: Chrome Built-in AI not detected.",
+          "Enable via chrome://flags — see panel for setup guide."
+        )
       }
-    } else {
-      setAiSupported(false);
+
+      // Voice control — SpeechRecognition API
+      // No flags needed — works in Chrome, Edge, Firefox
+      const hasVoice = !!(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).SpeechRecognition ||
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).webkitSpeechRecognition
+      )
+      setVoiceSupported(hasVoice)
     }
 
-    // 2. Check Speech (Your current logic is fine here)
-    const hasVoice = !!(
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition
-    );
-    setVoiceSupported(hasVoice);
-  };
-
-  checkSupport();
-}, []);
+    // 500ms delay for Chrome AI initialisation
+    const timer = setTimeout(run, 500)
+    return () => clearTimeout(timer)
+  }, [])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Load saved preferences from localStorage on mount
@@ -126,10 +210,9 @@ useEffect(() => {
   }, [])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Run the accessibility engine whenever settings change
+  // runEngine — builds A11yConfig and runs the WCAG engine
   // ─────────────────────────────────────────────────────────────────────────
   const runEngine = useCallback(async (current: WidgetSettings) => {
-    // Build config from current settings
     const config: A11yConfig = {
       enabled:             true,
       highContrast:        current.highContrast,
@@ -144,7 +227,7 @@ useEffect(() => {
       colorBlindMode:      current.colorBlindMode,
       showAuditBadge:      current.showAuditBadge,
       showSkipLinks:       true,
-      showPreferencePanel: false, // panel handled by React — not the engine
+      showPreferencePanel: false,
       plainEnglish:        current.plainEnglish,
       summarisePage:       current.summarisePage,
       translateLanguage:   current.translateLanguage,
@@ -153,7 +236,6 @@ useEffect(() => {
       ...configOverrides,
     }
 
-    // Run fixes and get report
     await wcagPlugin.execute(config)
     const freshReport = wcagPlugin.applyFixes(config)
     setReport(freshReport)
@@ -161,34 +243,26 @@ useEffect(() => {
   }, [configOverrides])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Apply settings — called from panel Apply button
+  // handleApply — saves and runs engine
   // ─────────────────────────────────────────────────────────────────────────
   const handleApply = useCallback(async () => {
-    // Save to localStorage
     try {
       localStorage.setItem("yuktai-a11y-prefs", JSON.stringify(settings))
-    } catch {
-      // ignore
-    }
-
-    // Run engine with new settings
+    } catch { /* ignore */ }
     await runEngine(settings)
     setPanelOpen(false)
   }, [settings, runEngine])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Reset — restore all defaults
+  // handleReset — clears all settings and DOM attributes
   // ─────────────────────────────────────────────────────────────────────────
   const handleReset = useCallback(() => {
     setSettings(DEFAULT_SETTINGS)
     try {
       localStorage.removeItem("yuktai-a11y-prefs")
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
 
-    // Remove all DOM attributes applied by engine
-    const root = document.documentElement
+    const root  = document.documentElement
     const attrs = [
       "data-yuktai-high-contrast",
       "data-yuktai-dark",
@@ -198,8 +272,8 @@ useEffect(() => {
       "data-yuktai-dyslexia",
     ]
     attrs.forEach(attr => root.removeAttribute(attr))
-    document.body.style.filter     = ""
-    document.body.style.fontFamily = ""
+    document.body.style.filter              = ""
+    document.body.style.fontFamily          = ""
     document.documentElement.style.fontSize = ""
 
     setReport(null)
@@ -207,7 +281,7 @@ useEffect(() => {
   }, [])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Update a single setting
+  // handleSet — updates a single setting
   // ─────────────────────────────────────────────────────────────────────────
   const handleSet = useCallback(<K extends keyof WidgetSettings>(
     key: K,
@@ -217,20 +291,18 @@ useEffect(() => {
   }, [])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Keyboard — Escape closes panel
+  // Escape key closes panel
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && panelOpen) {
-        setPanelOpen(false)
-      }
+      if (e.key === "Escape" && panelOpen) setPanelOpen(false)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [panelOpen])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Focus trap — when panel opens, keep focus inside
+  // Focus trap — keeps focus inside panel when open
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (panelOpen && panelRef.current) {
@@ -239,31 +311,28 @@ useEffect(() => {
   }, [panelOpen])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FAB button position — left or right
+  // FAB style — teal when active, blue when idle
   // ─────────────────────────────────────────────────────────────────────────
   const fabStyle: React.CSSProperties = {
-    position:     "fixed",
-    bottom:       "24px",
-    [position]:   "24px",
-    zIndex:       9998,
-    width:        "52px",
-    height:       "52px",
-    borderRadius: "50%",
-    background:   isActive ? "#0d9488" : "#1a73e8",
-    color:        "#fff",
-    border:       "none",
-    cursor:       "pointer",
-    fontSize:     "22px",
-    display:      "flex",
-    alignItems:   "center",
+    position:       "fixed",
+    bottom:         "24px",
+    [position]:     "24px",
+    zIndex:         9998,
+    width:          "52px",
+    height:         "52px",
+    borderRadius:   "50%",
+    background:     isActive ? "#0d9488" : "#1a73e8",
+    color:          "#fff",
+    border:         "none",
+    cursor:         "pointer",
+    fontSize:       "22px",
+    display:        "flex",
+    alignItems:     "center",
     justifyContent: "center",
-    boxShadow:    "0 4px 16px rgba(0,0,0,0.25)",
-    transition:   "transform 0.15s, background 0.2s",
+    boxShadow:      "0 4px 16px rgba(0,0,0,0.25)",
+    transition:     "transform 0.15s, background 0.2s",
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
       {/* App content — untouched */}
