@@ -70,24 +70,44 @@ export function YuktAIWrapper({
   // ── Panel ref — used for focus trap on open ──
   const panelRef = React.useRef<HTMLDivElement>(null)
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Detect browser AI support on mount
-  // Chrome 127+ has window.ai — older browsers do not
-  // ─────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (typeof window === "undefined") return
+ // ─────────────────────────────────────────────────────────────────────────
+// Detect browser AI support on mount — 2026 Optimized
+// ─────────────────────────────────────────────────────────────────────────
+useEffect(() => {
+  if (typeof window === "undefined") return;
 
-    // Check Chrome Built-in AI
-    const hasAI = !!(window as unknown as Record<string, unknown>).ai
-    setAiSupported(hasAI)
+  const checkSupport = async () => {
+    // 1. Check for the AI object (handling window.ai or global ai)
+    const aiEngine = (window as any).ai || (globalThis as any).ai;
+    
+    if (aiEngine && aiEngine.languageModel) {
+      try {
+        // In 2026, we MUST check availability to "wake up" the engine
+        const status = await aiEngine.languageModel.availability();
+        
+        // If it's 'readily' or 'downloadable', we count it as supported
+        if (status === "readily" || status === "downloadable") {
+          setAiSupported(true);
+          console.log("yuktai: AI Engine ready.");
+        }
+      } catch (e) {
+        console.error("yuktai: AI check failed", e);
+        setAiSupported(false);
+      }
+    } else {
+      setAiSupported(false);
+    }
 
-    // Check SpeechRecognition for voice control
+    // 2. Check Speech (Your current logic is fine here)
     const hasVoice = !!(
-      (window as unknown as Record<string, unknown>).SpeechRecognition ||
-      (window as unknown as Record<string, unknown>).webkitSpeechRecognition
-    )
-    setVoiceSupported(hasVoice)
-  }, [])
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition
+    );
+    setVoiceSupported(hasVoice);
+  };
+
+  checkSupport();
+}, []);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Load saved preferences from localStorage on mount
