@@ -626,7 +626,7 @@ const handleAsk = async () => {
 
         {/* ── Audit report ── */}
 
-// ── Section 6: Ask this page — RAG ──
+      {/* Section 6: Ask this page — RAG ──*/}
 <Divider />
 <SectionHeader
   label="Ask this page"
