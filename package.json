@@ -44,6 +44,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "react": ">=17.0.0"
   },
   "peerDependencies": {
@@ -51,18 +52,18 @@
     "react-dom": ">=17.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.5",
-    "tsup": "^8.0.2",
-    "vitest": "^1.6.0",
-    "eslint": "^8.57.0",
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@mui/icons-material": "^6.0.0",
+    "@mui/material": "^6.0.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@mui/material": "^6.0.0",
-    "@mui/icons-material": "^6.0.0",
-    "@emotion/react": "^11.13.3",
-    "@emotion/styled": "^11.13.0"
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   },
   "tsup": {
     "entry": [
