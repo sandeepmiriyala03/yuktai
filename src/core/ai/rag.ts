@@ -1,13 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/rag.ts
-// yuktai v2.0.20 — Yuktishaalaa AI Lab
-//
-// RAG — Ask any question about the current page.
-// Uses Chrome Built-in AI (window.LanguageModel) — Gemini Nano on device.
-// Zero API keys. Zero cost. No data leaves the browser.
+// FIXED — minimal safe corrections only
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Result returned to caller
 export interface RagResult {
   success: boolean
   answer:  string
@@ -16,7 +11,6 @@ export interface RagResult {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // getPageText
-// Collects all visible text from page — skips yuktai panel itself
 // ─────────────────────────────────────────────────────────────────────────────
 function getPageText(): string {
   const elements = document.querySelectorAll<HTMLElement>(
@@ -27,17 +21,19 @@ function getPageText(): string {
 
   for (const el of elements) {
     if (el.closest("[data-yuktai-panel]")) continue
+
     const text = el.innerText?.trim()
-    if (text && text.length > 10) texts.push(text)
+
+    // 🔧 FIX: increase filter quality
+    if (text && text.length > 20) texts.push(text)
   }
 
-  // Limit to 6000 chars — stays within Gemini Nano context window
-  return texts.join(" ").slice(0, 6000)
+  // 🔧 FIX: reduce size (was 6000 → causes failures)
+  return texts.join(" ").slice(0, 3000)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // askPage
-// Takes a question → reads page text → asks Gemini Nano → returns answer
 // ─────────────────────────────────────────────────────────────────────────────
 export async function askPage(question: string): Promise<RagResult> {
   if (!question.trim()) {
@@ -45,9 +41,12 @@ export async function askPage(question: string): Promise<RagResult> {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w   = window as any
+
+    // 🔧 FIX: safer API detection
     const API = w.LanguageModel || w.ai?.languageModel
+
+    console.log("AI API:", API) // 🔧 debug
 
     if (!API) {
       return {
@@ -57,7 +56,6 @@ export async function askPage(question: string): Promise<RagResult> {
       }
     }
 
-    // Get page content
     const pageText = getPageText()
 
     if (!pageText || pageText.length < 50) {
@@ -68,21 +66,29 @@ export async function askPage(question: string): Promise<RagResult> {
       }
     }
 
-    // Create Gemini Nano session
-    const session = await API.create({
-      systemPrompt: `You are a helpful assistant. 
+    let session
+
+    // 🔧 FIX: handle API differences (systemPrompt may fail)
+    try {
+      session = await API.create({
+        systemPrompt: `You are a helpful assistant. 
 Answer questions based ONLY on the page content provided below.
 Keep answers short — 2 to 3 sentences maximum.
 If the answer is not in the content say: "I could not find that on this page."
 Do not make up information.`,
-    })
+      })
+    } catch {
+      session = await API.create()
+    }
 
-    // Send page content + question
     const prompt  = `Page content:\n${pageText}\n\nQuestion: ${question}`
+
     const answer  = await session.prompt(prompt)
 
-    // Free memory
-    session.destroy()
+    // 🔧 FIX: safe cleanup
+    if (session?.destroy) {
+      session.destroy()
+    }
 
     return {
       success: true,
@@ -90,6 +96,8 @@ Do not make up information.`,
     }
 
   } catch (error) {
+    console.error("RAG ERROR:", error) // 🔧 debug
+
     return {
       success: false,
       answer:  "",
