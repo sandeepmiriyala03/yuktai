@@ -22,7 +22,7 @@ import React, { forwardRef, useEffect, useState } from "react"
 import type { A11yReport }    from "../core/renderer"
 import type { ColorBlindMode } from "../core/renderer"
 import { SUPPORTED_LANGUAGES } from "../core/ai/translator"
-
+import { askPage }              from "../core/ai/rag"
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -296,7 +296,9 @@ export const WidgetPanel = forwardRef<HTMLDivElement, Props>(
 
     const { isMobile, isTablet } = useScreenSize()
     const [localFonts, setLocalFonts] = useState<string[]>([])
-
+    const [ragQuestion,  setRagQuestion]  = useState("")
+    const [ragAnswer,    setRagAnswer]    = useState("")
+    const [ragLoading,   setRagLoading]   = useState(false)
     useEffect(() => {
       const loadFonts = async () => {
         try {
@@ -601,6 +603,134 @@ export const WidgetPanel = forwardRef<HTMLDivElement, Props>(
         </div>
 
         {/* ── Audit report ── */}
+
+
+        {/* ── Section 6: Ask this page — RAG ── */}
+        <Divider />
+        <SectionHeader
+          label="Ask this page"
+          color="#0d9488"
+          badge="Gemini Nano"
+        />
+        <div style={{ padding: "10px 18px 14px" }}>
+          <p style={{ margin: "0 0 8px", fontSize: "11px", color: "#64748b" }}>
+            Ask any question — answered from this page. On device. Zero cost.
+          </p>
+
+          {/* Input + Ask button */}
+          <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+            <input
+              type="text"
+              value={ragQuestion}
+              onChange={e => setRagQuestion(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !ragLoading) {
+                  setRagLoading(true)
+                  setRagAnswer("")
+                  askPage(ragQuestion).then(r => {
+                    setRagAnswer(r.answer || r.error || "")
+                    setRagLoading(false)
+                  })
+                }
+              }}
+              placeholder="e.g. Am I eligible for this?"
+              disabled={!aiSupported || ragLoading}
+              aria-label="Ask a question about this page"
+              style={{
+                flex:         1,
+                padding:      "8px 10px",
+                borderRadius: "8px",
+                border:       "1px solid #e2e8f0",
+                fontSize:     "12px",
+                color:        "#0f172a",
+                background:   aiSupported ? "#fff" : "#f8fafc",
+                outline:      "none",
+                height:       isMobile ? "44px" : "36px",
+              }}
+            />
+            <button
+              onClick={() => {
+                if (!ragQuestion.trim() || ragLoading || !aiSupported) return
+                setRagLoading(true)
+                setRagAnswer("")
+                askPage(ragQuestion).then(r => {
+                  setRagAnswer(r.answer || r.error || "")
+                  setRagLoading(false)
+                })
+              }}
+              disabled={!aiSupported || ragLoading || !ragQuestion.trim()}
+              aria-label="Ask question about this page"
+              style={{
+                padding:      "8px 14px",
+                borderRadius: "8px",
+                border:       "none",
+                background:   aiSupported && ragQuestion.trim() && !ragLoading
+                  ? "#0d9488" : "#e2e8f0",
+                color:        aiSupported && ragQuestion.trim() && !ragLoading
+                  ? "#fff" : "#94a3b8",
+                fontSize:     "12px",
+                fontWeight:   600,
+                cursor:       aiSupported && ragQuestion.trim() && !ragLoading
+                  ? "pointer" : "not-allowed",
+                flexShrink:   0,
+                height:       isMobile ? "44px" : "36px",
+                minWidth:     "52px",
+                transition:   "background 0.2s",
+              }}
+            >
+              {ragLoading ? "..." : "Ask"}
+            </button>
+          </div>
+
+          {/* Answer box */}
+          {ragAnswer && (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                padding:      "10px 12px",
+                background:   "#f0fdfa",
+                border:       "1px solid #99f6e4",
+                borderRadius: "8px",
+                fontSize:     "12px",
+                color:        "#0f766e",
+                lineHeight:   1.6,
+              }}
+            >
+              <strong style={{
+                display:      "block",
+                marginBottom: "4px",
+                fontSize:     "11px",
+                color:        "#0d9488",
+              }}>
+                💬 Answer
+              </strong>
+              {ragAnswer}
+              <button
+                onClick={() => { setRagAnswer(""); setRagQuestion("") }}
+                style={{
+                  display:   "block",
+                  marginTop: "6px",
+                  background: "none",
+                  border:    "none",
+                  color:     "#94a3b8",
+                  fontSize:  "10px",
+                  cursor:    "pointer",
+                  padding:   0,
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
+          {/* Not supported message */}
+          {!aiSupported && (
+            <p style={{ margin: "4px 0 0", fontSize: "10px", color: "#94a3b8" }}>
+              Enable Gemini Nano using the setup guide above to unlock this.
+            </p>
+          )}
+        </div>
         {report && (
           <div role="status" style={{
             margin: "0 14px", padding: "8px 12px",
