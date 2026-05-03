@@ -1,6 +1,6 @@
 {
 "name": "@yuktishaalaa/yuktai",
-"version": "3.0.7",
+"version": "3.0.8",
 "description": "Universal runtime accessibility plugin — auto-fixes WCAG 2.2 violations with on-device AI features. Zero API keys.",
 "author": "Sandeep Miriyala — Yuktishaalaa AI Lab",
 "license": "ISC",

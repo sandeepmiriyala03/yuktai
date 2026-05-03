@@ -62,7 +62,7 @@ async function loadModels(): Promise<void> {
 
   try {
     // Dynamic import — Transformers.js is large, load only when needed
-    const { pipeline } = await import("@huggingface/transformers")
+    const { pipeline } = await import("@xenova/transformers")
 
     // Load embedding model — converts text to vectors
     // Xenova/all-MiniLM-L6-v2 — fast, small, good quality
