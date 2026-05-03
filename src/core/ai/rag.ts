@@ -1,39 +1,69 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// src/core/ai/rag.ts
-// FIXED — minimal safe corrections only
+// rag.ts — improved universal extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RagResult {
   success: boolean
-  answer:  string
-  error?:  string
+  answer: string
+  error?: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// getPageText
+// Wait for page to stabilize (important for React / SPA)
+// ─────────────────────────────────────────────────────────────────────────────
+function waitForContent(): Promise<void> {
+  return new Promise(resolve => {
+    let timeout = setTimeout(resolve, 1500)
+
+    const observer = new MutationObserver(() => {
+      clearTimeout(timeout)
+      timeout = setTimeout(() => {
+        observer.disconnect()
+        resolve()
+      }, 500)
+    })
+
+    observer.observe(document.body, { childList: true, subtree: true })
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extract maximum useful text
 // ─────────────────────────────────────────────────────────────────────────────
 function getPageText(): string {
-  const elements = document.querySelectorAll<HTMLElement>(
-    "p, h1, h2, h3, h4, h5, h6, li, td, th, label, figcaption"
-  )
-
   const texts: string[] = []
+
+  const elements = document.querySelectorAll<HTMLElement>("*")
 
   for (const el of elements) {
     if (el.closest("[data-yuktai-panel]")) continue
 
+    // visible text
     const text = el.innerText?.trim()
+    if (text && text.length > 30) texts.push(text)
 
-    // 🔧 FIX: increase filter quality
-    if (text && text.length > 20) texts.push(text)
+    // aria labels (important for accessibility sites)
+    const aria = el.getAttribute("aria-label")
+    if (aria && aria.length > 10) texts.push(aria)
+
+    // input values / placeholders
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      if (el.placeholder) texts.push(el.placeholder)
+      if (el.value) texts.push(el.value)
+    }
+
+    // button labels
+    if (el instanceof HTMLButtonElement) {
+      const btn = el.innerText || el.getAttribute("aria-label")
+      if (btn) texts.push(btn)
+    }
   }
 
-  // 🔧 FIX: reduce size (was 6000 → causes failures)
-  return texts.join(" ").slice(0, 3000)
+  return texts.join(" ").slice(0, 3500)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// askPage
+// Main function
 // ─────────────────────────────────────────────────────────────────────────────
 export async function askPage(question: string): Promise<RagResult> {
   if (!question.trim()) {
@@ -41,67 +71,59 @@ export async function askPage(question: string): Promise<RagResult> {
   }
 
   try {
-    const w   = window as any
-
-    // 🔧 FIX: safer API detection
+    const w = window as any
     const API = w.LanguageModel || w.ai?.languageModel
-
-    console.log("AI API:", API) // 🔧 debug
 
     if (!API) {
       return {
         success: false,
-        answer:  "",
-        error:   "Gemini Nano not available. Enable via chrome://flags.",
+        answer: "",
+        error: "Gemini Nano not available.",
       }
     }
 
+    // 🔥 IMPORTANT: wait for dynamic content
+    await waitForContent()
+
     const pageText = getPageText()
 
-    if (!pageText || pageText.length < 50) {
+    if (!pageText || pageText.length < 100) {
       return {
         success: false,
-        answer:  "",
-        error:   "Not enough content on this page to answer from.",
+        answer: "",
+        error: "Page content not readable.",
       }
     }
 
     let session
 
-    // 🔧 FIX: handle API differences (systemPrompt may fail)
     try {
       session = await API.create({
-        systemPrompt: `You are a helpful assistant. 
-Answer questions based ONLY on the page content provided below.
-Keep answers short — 2 to 3 sentences maximum.
-If the answer is not in the content say: "I could not find that on this page."
-Do not make up information.`,
+        systemPrompt: `Answer ONLY using page content.
+Keep answer short (2–3 sentences).
+If not found say: "I could not find that on this page."`,
+        outputLanguage: "en",
       })
     } catch {
       session = await API.create()
     }
 
-    const prompt  = `Page content:\n${pageText}\n\nQuestion: ${question}`
+    const prompt = `Page:\n${pageText}\n\nQ: ${question}`
 
-    const answer  = await session.prompt(prompt)
+    const answer = await session.prompt(prompt)
 
-    // 🔧 FIX: safe cleanup
-    if (session?.destroy) {
-      session.destroy()
-    }
+    if (session?.destroy) session.destroy()
 
     return {
       success: true,
-      answer:  answer?.trim() || "No answer found.",
+      answer: answer?.trim() || "No answer found.",
     }
 
-  } catch (error) {
-    console.error("RAG ERROR:", error) // 🔧 debug
-
+  } catch (e) {
     return {
       success: false,
-      answer:  "",
-      error:   error instanceof Error ? error.message : "Something went wrong.",
+      answer: "",
+      error: e instanceof Error ? e.message : "Error occurred",
     }
   }
 }
