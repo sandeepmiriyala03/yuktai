@@ -136,16 +136,37 @@ function getPageText(): string {
 // chunkText
 // Splits page text into overlapping chunks for better retrieval
 // ─────────────────────────────────────────────────────────────────────────────
-function chunkText(text: string, chunkSize = 200, overlap = 50): string[] {
-  const words  = text.split(/\s+/)
-  const chunks: string[] = []
+function chunkText(text: any, chunkSize = 200, overlap = 50): string[] {
+// ✅ Ensure string
+if (typeof text !== "string") {
+try {
+text = String(text ?? "")
+} catch {
+return []
+}
+}
 
-  for (let i = 0; i < words.length; i += chunkSize - overlap) {
-    const chunk = words.slice(i, i + chunkSize).join(" ")
-    if (chunk.trim().length > 20) chunks.push(chunk)
-  }
+text = text.trim()
+if (!text) return []
 
-  return chunks
+// ✅ Prevent infinite loop
+if (chunkSize <= overlap) {
+overlap = Math.floor(chunkSize / 2)
+}
+
+const words = text.split(/\s+/)
+const chunks: string[] = []
+
+const step = chunkSize - overlap
+
+for (let i = 0; i < words.length; i += step) {
+const chunk = words.slice(i, i + chunkSize).join(" ")
+if (chunk && chunk.trim().length > 20) {
+chunks.push(chunk)
+}
+}
+
+return chunks
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
