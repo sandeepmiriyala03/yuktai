@@ -1,18 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/react/YuktAIWrapper.tsx
-// yuktai v2.0.20 — Yuktishaalaa AI Lab
+// yuktai v3.0.9 — Yuktishaalaa AI Lab
 //
-// Main React wrapper component.
-// AI detection fixed for Chrome 147+ — APIs moved to standalone globals.
+// Two floating buttons:
+//   ♿  — Accessibility panel (bottom)
+//   💬  — RAG Ask panel (above ♿, shown when showRag={true})
 //
-// Chrome 127–146: window.ai.languageModel / summarizer / rewriter / writer
-// Chrome 147+:    window.LanguageModel / Summarizer / Rewriter / Writer
+// RAG engine auto-selected:
+//   Desktop Chrome + Gemini Nano → rag.ts (instant, no download)
+//   Mobile / All other browsers  → transformers-rag.ts (works offline)
 //
-// Usage in Next.js App Router:
-//   <YuktAIWrapper position="left">{children}</YuktAIWrapper>
-//
-// With RAG button:
-//   <YuktAIWrapper position="left" showRag={true}>{children}</YuktAIWrapper>
+// Usage:
+//   <YuktAIWrapper position="left">                 — ♿ only
+//   <YuktAIWrapper position="left" showRag={true}>  — ♿ + 💬
 // ─────────────────────────────────────────────────────────────────────────────
 
 "use client"
@@ -26,6 +26,10 @@ import React, {
 
 import { wcagPlugin, type A11yConfig, type A11yReport } from "../core/renderer"
 import { WidgetPanel, type WidgetSettings, DEFAULT_SETTINGS } from "./WidgetPanel"
+import {
+  isTransformersSupported,
+  getModelLoadStatus,
+} from "../core/ai/transformers-rag"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -34,102 +38,65 @@ export interface YuktAIWrapperProps {
   position?: "left" | "right"
   children:  ReactNode
   config?:   Partial<A11yConfig>
-  showRag?:  boolean            // show 💬 RAG floating button — default false
+  showRag?:  boolean   // show 💬 RAG button — default false
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAISupport
-// Chrome 147+ moved AI APIs from window.ai.* to standalone globals.
-// We check both — newest first.
+// detectAISupport — checks Chrome Built-in AI (Gemini Nano)
+// Chrome 147+: window.LanguageModel / Summarizer / Rewriter / Writer
+// Chrome 127–146: window.ai.*
 // ─────────────────────────────────────────────────────────────────────────────
 async function detectAISupport(): Promise<boolean> {
   try {
     if (typeof window === "undefined") return false
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any
 
-    // Chrome 147+ standalone globals
     if (w.LanguageModel) {
       try {
         if (typeof w.LanguageModel.availability === "function") {
-          const status = await w.LanguageModel.availability()
-          console.log("yuktai: LanguageModel.availability() =", status)
-          if (status === "readily" || status === "available" || status === "downloadable") return true
-        } else {
-          return true
-        }
+          const s = await w.LanguageModel.availability()
+          if (s === "readily" || s === "available" || s === "downloadable") return true
+        } else return true
       } catch { /* continue */ }
     }
-
     if (w.Summarizer) {
       try {
-        if (typeof w.Summarizer.availability === "function") {
-          const status = await w.Summarizer.availability()
-          if (status === "readily" || status === "available") return true
-        } else { return true }
+        const s = await w.Summarizer.availability?.()
+        if (!s || s === "readily" || s === "available") return true
       } catch { /* continue */ }
     }
-
     if (w.Rewriter) {
       try {
-        if (typeof w.Rewriter.availability === "function") {
-          const status = await w.Rewriter.availability()
-          if (status === "readily" || status === "available") return true
-        } else { return true }
+        const s = await w.Rewriter.availability?.()
+        if (!s || s === "readily" || s === "available") return true
       } catch { /* continue */ }
     }
-
     if (w.Writer) {
       try {
-        if (typeof w.Writer.availability === "function") {
-          const status = await w.Writer.availability()
-          if (status === "readily" || status === "available") return true
-        } else { return true }
+        const s = await w.Writer.availability?.()
+        if (!s || s === "readily" || s === "available") return true
       } catch { /* continue */ }
     }
 
-    // Chrome 127–146 window.ai namespace
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ai = w.ai || (globalThis as any).ai
-
     if (ai) {
       if (ai.languageModel?.availability) {
-        try {
-          const status = await ai.languageModel.availability()
-          if (status === "readily" || status === "downloadable" || status === "available") return true
-        } catch { /* continue */ }
-      }
-      if (ai.languageModel?.capabilities) {
-        try {
-          const caps = await ai.languageModel.capabilities()
-          if (caps?.available === "readily" || caps?.available === "after-download") return true
-        } catch { /* continue */ }
+        try { const s = await ai.languageModel.availability(); if (s === "readily" || s === "available") return true } catch { /* continue */ }
       }
       if (ai.languageModel && typeof ai.languageModel.create === "function") return true
-      if (ai.summarizer?.capabilities) {
-        try { const caps = await ai.summarizer.capabilities(); if (caps?.available !== "no") return true } catch { /* continue */ }
-      }
-      if (ai.rewriter?.capabilities) {
-        try { const caps = await ai.rewriter.capabilities(); if (caps?.available !== "no") return true } catch { /* continue */ }
-      }
-      if (ai.writer?.capabilities) {
-        try { const caps = await ai.writer.capabilities(); if (caps?.available !== "no") return true } catch { /* continue */ }
-      }
       if (ai.summarizer || ai.rewriter || ai.writer || ai.languageModel) return true
     }
-
     if (w.Translator || w.translation?.canTranslate) return true
-
     return false
-
   } catch {
     return false
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// YuktAIWrapper — main component
+// YuktAIWrapper
 // ─────────────────────────────────────────────────────────────────────────────
 export function YuktAIWrapper({
   position = "left",
@@ -138,243 +105,211 @@ export function YuktAIWrapper({
   showRag = false,
 }: YuktAIWrapperProps) {
 
-  // ── Accessibility panel state ──
-  const [panelOpen, setPanelOpen]           = useState(false)
-  const [settings, setSettings]             = useState<WidgetSettings>(DEFAULT_SETTINGS)
-  const [report, setReport]                 = useState<A11yReport | null>(null)
-  const [isActive, setIsActive]             = useState(false)
-  const [aiSupported, setAiSupported]       = useState(false)
+  // ── Panel state ──
+  const [panelOpen,      setPanelOpen]      = useState(false)
+  const [settings,       setSettings]       = useState<WidgetSettings>(DEFAULT_SETTINGS)
+  const [report,         setReport]         = useState<A11yReport | null>(null)
+  const [isActive,       setIsActive]       = useState(false)
+  const [aiSupported,    setAiSupported]    = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
   const panelRef                            = React.useRef<HTMLDivElement>(null)
 
-  // ── RAG state — only used when showRag={true} ──
-  const [ragOpen,     setRagOpen]     = useState(false)
-  const [ragQuestion, setRagQuestion] = useState("")
-  const [ragAnswer,   setRagAnswer]   = useState("")
-  const [ragLoading,  setRagLoading]  = useState(false)
+  // ── RAG state ──
+  const [ragOpen,      setRagOpen]      = useState(false)
+  const [ragQuestion,  setRagQuestion]  = useState("")
+  const [ragAnswer,    setRagAnswer]    = useState("")
+  const [ragLoading,   setRagLoading]   = useState(false)
+  const [ragEngine,    setRagEngine]    = useState<"gemini" | "transformers" | null>(null)
+  const [modelStatus,  setModelStatus]  = useState<"idle" | "loading" | "ready">("idle")
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // RAG ask handler
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Detect RAG engine on mount ──
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    const hasGemini = !!(w.LanguageModel || w.ai?.languageModel)
+    if (hasGemini && aiSupported) {
+      setRagEngine("gemini")
+    } else if (isTransformersSupported()) {
+      setRagEngine("transformers")
+    }
+  }, [aiSupported])
+
+  // ── Poll Transformers model status ──
+  useEffect(() => {
+    if (ragEngine !== "transformers") return
+    const interval = setInterval(() => setModelStatus(getModelLoadStatus()), 500)
+    return () => clearInterval(interval)
+  }, [ragEngine])
+
+  // ── RAG ask handler — auto switches between Gemini Nano and Transformers.js ──
   const handleRagAsk = useCallback(async () => {
-    if (!ragQuestion.trim() || ragLoading || !aiSupported) return
+    if (!ragQuestion.trim() || ragLoading) return
+    if (!ragEngine) {
+      setRagAnswer("⚠️ No AI engine available on this device.")
+      return
+    }
+
     setRagLoading(true)
     setRagAnswer("")
+
     try {
-      const { askPage } = await import("../core/ai/rag")
-      const r = await askPage(ragQuestion)
+      let result
+
+      if (ragEngine === "gemini") {
+        const { askPage } = await import("../core/ai/rag")
+        result = await askPage(ragQuestion)
+      } else {
+        setModelStatus("loading")
+        const { askPageWithTransformers } = await import("../core/ai/transformers-rag")
+        result = await askPageWithTransformers(ragQuestion)
+        setModelStatus("ready")
+      }
+
       setRagAnswer(
-        r.success
-          ? r.answer
+        result.success && result.answer
+          ? result.answer
               .replace(/\*\*(.*?)\*\*/g, "$1")
               .replace(/\*(.*?)\*/g, "$1")
               .replace(/#+\s/g, "")
               .trim()
-          : "⚠️ " + (r.error || "No answer found.")
+          : "⚠️ " + (result.error || "No answer found.")
       )
     } catch {
-      setRagAnswer("⚠️ Something went wrong.")
+      setRagAnswer("⚠️ Something went wrong. Please try again.")
     }
-    setRagLoading(false)
-  }, [ragQuestion, ragLoading, aiSupported])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Detect AI and voice support on mount
-  // 800ms delay — Chrome 147 needs more time to expose standalone globals
-  // ─────────────────────────────────────────────────────────────────────────
+    setRagLoading(false)
+  }, [ragQuestion, ragLoading, ragEngine])
+
+  // ── Detect AI and voice on mount ──
   useEffect(() => {
     if (typeof window === "undefined") return
 
     const run = async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const w = window as any
-
       console.log("yuktai: Checking AI APIs...")
-      console.log("yuktai: window.ai =", w.ai)
       console.log("yuktai: window.LanguageModel =", w.LanguageModel)
-      console.log("yuktai: window.Summarizer =", w.Summarizer)
-      console.log("yuktai: window.Rewriter =", w.Rewriter)
-      console.log("yuktai: window.Writer =", w.Writer)
 
       const supported = await detectAISupport()
       setAiSupported(supported)
+      console.log(supported
+        ? "yuktai: Chrome Built-in AI detected ✅"
+        : "yuktai: Chrome Built-in AI not detected — Transformers.js will handle RAG on mobile"
+      )
 
-      if (supported) {
-        console.log("yuktai: Chrome Built-in AI detected ✅")
-      } else {
-        console.log("yuktai: Chrome Built-in AI not detected ❌")
-        console.log("yuktai: Enable flags at chrome://flags and download model at chrome://components")
-      }
-
-      const hasVoice = !!(w.SpeechRecognition || w.webkitSpeechRecognition)
-      setVoiceSupported(hasVoice)
+      setVoiceSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition))
     }
 
     const timer = setTimeout(run, 800)
     return () => clearTimeout(timer)
   }, [])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Load saved preferences from localStorage
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Load saved preferences ──
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
       const saved = localStorage.getItem("yuktai-a11y-prefs")
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<WidgetSettings>
-        setSettings(prev => ({ ...prev, ...parsed }))
-      }
+      if (saved) setSettings(prev => ({ ...prev, ...JSON.parse(saved) }))
     } catch { /* ignore */ }
   }, [])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // runEngine
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Engine ──
   const runEngine = useCallback(async (current: WidgetSettings) => {
     const config: A11yConfig = {
-      enabled:             true,
-      highContrast:        current.highContrast,
-      darkMode:            current.darkMode,
-      reduceMotion:        current.reduceMotion,
-      largeTargets:        current.largeTargets,
-      speechEnabled:       current.speechEnabled,
-      autoFix:             current.autoFix,
-      dyslexiaFont:        current.dyslexiaFont,
-      localFont:           current.localFont,
-      fontSizeMultiplier:  current.fontScale / 100,
-      colorBlindMode:      current.colorBlindMode,
-      showAuditBadge:      current.showAuditBadge,
-      showSkipLinks:       true,
-      showPreferencePanel: false,
-      plainEnglish:        current.plainEnglish,
-      summarisePage:       current.summarisePage,
-      translateLanguage:   current.translateLanguage,
-      voiceControl:        current.voiceControl,
-      smartLabels:         current.smartLabels,
-      ...configOverrides,
+      enabled: true, highContrast: current.highContrast, darkMode: current.darkMode,
+      reduceMotion: current.reduceMotion, largeTargets: current.largeTargets,
+      speechEnabled: current.speechEnabled, autoFix: current.autoFix,
+      dyslexiaFont: current.dyslexiaFont, localFont: current.localFont,
+      fontSizeMultiplier: current.fontScale / 100, colorBlindMode: current.colorBlindMode,
+      showAuditBadge: current.showAuditBadge, showSkipLinks: true, showPreferencePanel: false,
+      plainEnglish: current.plainEnglish, summarisePage: current.summarisePage,
+      translateLanguage: current.translateLanguage, voiceControl: current.voiceControl,
+      smartLabels: current.smartLabels, ...configOverrides,
     }
     await wcagPlugin.execute(config)
-    const freshReport = wcagPlugin.applyFixes(config)
-    setReport(freshReport)
+    setReport(wcagPlugin.applyFixes(config))
     setIsActive(true)
   }, [configOverrides])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // handleApply
-  // ─────────────────────────────────────────────────────────────────────────
   const handleApply = useCallback(async () => {
     try { localStorage.setItem("yuktai-a11y-prefs", JSON.stringify(settings)) } catch { /* ignore */ }
     await runEngine(settings)
     setPanelOpen(false)
   }, [settings, runEngine])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // handleReset
-  // ─────────────────────────────────────────────────────────────────────────
   const handleReset = useCallback(() => {
     setSettings(DEFAULT_SETTINGS)
     try { localStorage.removeItem("yuktai-a11y-prefs") } catch { /* ignore */ }
     const root = document.documentElement
-    ;[
-      "data-yuktai-high-contrast",
-      "data-yuktai-dark",
-      "data-yuktai-reduce-motion",
-      "data-yuktai-large-targets",
-      "data-yuktai-keyboard",
-      "data-yuktai-dyslexia",
-    ].forEach(attr => root.removeAttribute(attr))
-    document.body.style.filter              = ""
-    document.body.style.fontFamily          = ""
+    ;["data-yuktai-high-contrast","data-yuktai-dark","data-yuktai-reduce-motion","data-yuktai-large-targets","data-yuktai-keyboard","data-yuktai-dyslexia"].forEach(a => root.removeAttribute(a))
+    document.body.style.filter = ""
+    document.body.style.fontFamily = ""
     document.documentElement.style.fontSize = ""
-    setReport(null)
-    setIsActive(false)
+    setReport(null); setIsActive(false)
   }, [])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // handleSet
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleSet = useCallback(<K extends keyof WidgetSettings>(
-    key: K, val: WidgetSettings[K]
-  ) => {
+  const handleSet = useCallback(<K extends keyof WidgetSettings>(key: K, val: WidgetSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: val }))
   }, [])
 
-  // Escape closes both panels
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (panelOpen) setPanelOpen(false)
-        if (ragOpen)   setRagOpen(false)
-      }
+      if (e.key === "Escape") { if (panelOpen) setPanelOpen(false); if (ragOpen) setRagOpen(false) }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [panelOpen, ragOpen])
 
-  // Focus trap on accessibility panel
   useEffect(() => {
     if (panelOpen && panelRef.current) wcagPlugin.trapFocus(panelRef.current)
   }, [panelOpen])
 
-  // ── ♿ FAB style ──
+  // ── RAG loading message ──
+  const ragLoadingMsg = ragEngine === "transformers" && modelStatus === "loading"
+    ? "Loading AI... (first time only)"
+    : "..."
+
+  // ── RAG panel subtitle ──
+  const ragSubtitle = ragEngine === "gemini"
+    ? "Gemini Nano · On device · Instant"
+    : ragEngine === "transformers"
+    ? "Transformers.js · All devices · Offline"
+    : "Detecting engine..."
+
+  // ── FAB styles ──
   const fabStyle: React.CSSProperties = {
-    position:       "fixed",
-    bottom:         "24px",
-    [position]:     "24px",
-    zIndex:         9998,
-    width:          "52px",
-    height:         "52px",
-    borderRadius:   "50%",
-    background:     isActive ? "#0d9488" : "#1a73e8",
-    color:          "#fff",
-    border:         "none",
-    cursor:         "pointer",
-    fontSize:       "22px",
-    display:        "flex",
-    alignItems:     "center",
-    justifyContent: "center",
-    boxShadow:      "0 4px 16px rgba(0,0,0,0.25)",
-    transition:     "transform 0.15s, background 0.2s",
+    position: "fixed", bottom: "24px", [position]: "24px", zIndex: 9998,
+    width: "52px", height: "52px", borderRadius: "50%",
+    background: isActive ? "#0d9488" : "#1a73e8",
+    color: "#fff", border: "none", cursor: "pointer", fontSize: "22px",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "transform 0.15s, background 0.2s",
   }
 
-  // ── 💬 RAG FAB style — sits above ♿ ──
   const ragFabStyle: React.CSSProperties = {
-    position:       "fixed",
-    bottom:         "84px",       // 24px (♿) + 52px (♿ height) + 8px gap
-    [position]:     "24px",
-    zIndex:         9998,
-    width:          "52px",
-    height:         "52px",
-    borderRadius:   "50%",
-    background:     ragOpen ? "#7c3aed" : "#6d28d9",
-    color:          "#fff",
-    border:         "none",
-    cursor:         "pointer",
-    fontSize:       "22px",
-    display:        "flex",
-    alignItems:     "center",
-    justifyContent: "center",
-    boxShadow:      "0 4px 16px rgba(0,0,0,0.25)",
-    transition:     "transform 0.15s, background 0.2s",
+    position: "fixed", bottom: "84px", [position]: "24px", zIndex: 9998,
+    width: "52px", height: "52px", borderRadius: "50%",
+    background: ragOpen ? "#7c3aed" : "#6d28d9",
+    color: "#fff", border: "none", cursor: "pointer", fontSize: "22px",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "transform 0.15s, background 0.2s",
   }
 
   return (
     <>
-      {/* App content */}
       {children}
 
-      {/* ── 💬 RAG floating button — only when showRag={true} ── */}
+      {/* ── 💬 RAG button — shown when showRag={true} ── */}
       {showRag && (
         <button
           style={ragFabStyle}
           aria-label="Ask a question about this page"
           aria-haspopup="dialog"
           aria-expanded={ragOpen}
-          onClick={() => {
-            setRagOpen(prev => !prev)
-            setPanelOpen(false)   // close accessibility panel if open
-          }}
+          title={`Ask this page · ${ragSubtitle}`}
+          onClick={() => { setRagOpen(p => !p); setPanelOpen(false) }}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)" }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)" }}
         >
@@ -390,44 +325,38 @@ export function YuktAIWrapper({
           aria-label="Ask this page"
           data-yuktai-panel="true"
           style={{
-            position:     "fixed",
-            bottom:       "148px",    // above 💬 button
-            [position]:   "24px",
-            zIndex:       9999,
-            width:        "300px",
-            maxWidth:     "calc(100vw - 48px)",
-            background:   "#fff",
-            border:       "1px solid #e2e8f0",
-            borderRadius: "16px",
-            boxShadow:    "0 8px 32px rgba(0,0,0,0.12)",
-            fontFamily:   "system-ui,-apple-system,sans-serif",
-            padding:      "14px",
+            position: "fixed", bottom: "148px", [position]: "24px", zIndex: 9999,
+            width: "300px", maxWidth: "calc(100vw - 48px)",
+            background: "#fff", border: "1px solid #e2e8f0",
+            borderRadius: "16px", boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+            fontFamily: "system-ui,-apple-system,sans-serif", padding: "14px",
           }}
         >
-          {/* RAG Header */}
+          {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
             <div>
-              <p style={{ margin: "0 0 2px", fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>
-                💬 Ask this page
+              <p style={{ margin: "0 0 2px", fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>💬 Ask this page</p>
+              <p style={{ margin: 0, fontSize: "10px", color: ragEngine === "gemini" ? "#0d9488" : "#7c3aed" }}>
+                {ragSubtitle}
               </p>
-              <p style={{ margin: 0, fontSize: "10px", color: "#7c3aed" }}>
-                Gemini Nano · On device · Zero cost
-              </p>
+              {ragEngine === "transformers" && modelStatus === "loading" && (
+                <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#94a3b8" }}>
+                  Downloading AI model — first time only (~90MB)
+                </p>
+              )}
+              {ragEngine === "transformers" && modelStatus === "ready" && (
+                <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#0d9488" }}>
+                  Model ready ✅ — works offline now
+                </p>
+              )}
             </div>
-            <button
-              onClick={() => setRagOpen(false)}
-              aria-label="Close ask panel"
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: "#94a3b8", fontSize: "18px", lineHeight: 1,
-                padding: "2px", borderRadius: "4px",
-              }}
-            >
+            <button onClick={() => setRagOpen(false)} aria-label="Close ask panel"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "18px", lineHeight: 1, padding: "2px", borderRadius: "4px" }}>
               ×
             </button>
           </div>
 
-          {/* RAG Input + Ask button */}
+          {/* Input */}
           <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
             <input
               type="text"
@@ -435,106 +364,62 @@ export function YuktAIWrapper({
               onChange={e => setRagQuestion(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") handleRagAsk() }}
               placeholder="e.g. What does this page do?"
-              disabled={!aiSupported || ragLoading}
+              disabled={ragLoading || !ragEngine}
               aria-label="Ask a question about this page"
-              style={{
-                flex:         1,
-                padding:      "8px 10px",
-                borderRadius: "8px",
-                border:       "1px solid #e2e8f0",
-                fontSize:     "12px",
-                color:        "#0f172a",
-                background:   aiSupported ? "#fff" : "#f8fafc",
-                outline:      "none",
-                height:       "36px",
-              }}
+              style={{ flex: 1, padding: "8px 10px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "12px", color: "#0f172a", background: ragEngine ? "#fff" : "#f8fafc", outline: "none", height: "36px" }}
             />
             <button
               onClick={handleRagAsk}
-              disabled={!aiSupported || ragLoading || !ragQuestion.trim()}
+              disabled={ragLoading || !ragQuestion.trim() || !ragEngine}
               aria-label="Submit question"
               style={{
-                padding:      "8px 12px",
-                borderRadius: "8px",
-                border:       "none",
-                background:   aiSupported && ragQuestion.trim() && !ragLoading
-                  ? "#7c3aed" : "#e2e8f0",
-                color:        aiSupported && ragQuestion.trim() && !ragLoading
-                  ? "#fff" : "#94a3b8",
-                fontSize:     "12px",
-                fontWeight:   600,
-                cursor:       aiSupported && ragQuestion.trim() && !ragLoading
-                  ? "pointer" : "not-allowed",
-                height:       "36px",
-                minWidth:     "48px",
-                transition:   "background 0.2s",
+                padding: "8px 12px", borderRadius: "8px", border: "none",
+                background: ragEngine && ragQuestion.trim() && !ragLoading ? "#7c3aed" : "#e2e8f0",
+                color: ragEngine && ragQuestion.trim() && !ragLoading ? "#fff" : "#94a3b8",
+                fontSize: "12px", fontWeight: 600,
+                cursor: ragEngine && ragQuestion.trim() && !ragLoading ? "pointer" : "not-allowed",
+                height: "36px", minWidth: "48px", transition: "background 0.2s",
               }}
             >
-              {ragLoading ? "..." : "Ask"}
+              {ragLoading ? ragLoadingMsg : "Ask"}
             </button>
           </div>
 
-          {/* RAG Answer */}
+          {/* Answer */}
           {ragAnswer && (
-            <div style={{
-              padding:      "10px",
-              background:   "#f5f3ff",
-              borderRadius: "8px",
-              fontSize:     "12px",
-              color:        "#4c1d95",
-              lineHeight:   1.6,
-              maxHeight:    "180px",
-              overflowY:    "auto",
-            }}>
-              <strong style={{ display: "block", marginBottom: "4px", fontSize: "11px", color: "#7c3aed" }}>
-                💬 Answer
-              </strong>
+            <div style={{ padding: "10px", background: "#f5f3ff", borderRadius: "8px", fontSize: "12px", color: "#4c1d95", lineHeight: 1.6, maxHeight: "180px", overflowY: "auto" }}>
+              <strong style={{ display: "block", marginBottom: "4px", fontSize: "11px", color: "#7c3aed" }}>💬 Answer</strong>
               {ragAnswer}
-              <button
-                onClick={() => { setRagAnswer(""); setRagQuestion("") }}
-                style={{
-                  display:    "block",
-                  marginTop:  "6px",
-                  background: "none",
-                  border:     "none",
-                  color:      "#94a3b8",
-                  fontSize:   "10px",
-                  cursor:     "pointer",
-                  padding:    0,
-                }}
-              >
+              <button onClick={() => { setRagAnswer(""); setRagQuestion("") }}
+                style={{ display: "block", marginTop: "6px", background: "none", border: "none", color: "#94a3b8", fontSize: "10px", cursor: "pointer", padding: 0 }}>
                 Clear
               </button>
             </div>
           )}
 
-          {/* Not supported message */}
-          {!aiSupported && (
+          {!ragEngine && (
             <p style={{ margin: "4px 0 0", fontSize: "10px", color: "#94a3b8" }}>
-              Enable Gemini Nano via chrome://flags to use this feature.
+              Detecting AI engine...
             </p>
           )}
         </div>
       )}
 
-      {/* ── ♿ Floating accessibility button ── */}
+      {/* ── ♿ Accessibility button ── */}
       <button
         style={fabStyle}
         aria-label="Open accessibility preferences"
         aria-haspopup="dialog"
         aria-expanded={panelOpen}
         data-yuktai-pref-toggle="true"
-        onClick={() => {
-          setPanelOpen(prev => !prev)
-          setRagOpen(false)   // close RAG panel if open
-        }}
+        onClick={() => { setPanelOpen(p => !p); setRagOpen(false) }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)" }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)" }}
       >
         ♿
       </button>
 
-      {/* ── Accessibility preference panel ── */}
+      {/* ── Accessibility panel ── */}
       {panelOpen && (
         <WidgetPanel
           ref={panelRef}

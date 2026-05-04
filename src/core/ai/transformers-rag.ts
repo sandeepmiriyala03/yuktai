@@ -1,32 +1,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/transformers-rag.ts
-// yuktai v2.1.0 — Yuktishaalaa AI Lab
+// yuktai v3.0.9 — Yuktishaalaa AI Lab
 //
 // Mobile RAG — Ask any question about the current page.
-// Uses Transformers.js (Hugging Face) — runs entirely in the browser.
+// Uses @huggingface/transformers — runs entirely in the browser.
 //
 // Works on:
 //   ✅ Mobile Chrome (Android)
 //   ✅ Mobile Safari (iOS)
-//   ✅ Desktop Chrome (without Gemini Nano flags)
-//   ✅ Firefox
-//   ✅ Edge
-//   ✅ PWA offline (after first model load)
+//   ✅ Desktop Chrome (any browser without Gemini Nano)
+//   ✅ Firefox, Edge, Samsung Internet
+//   ✅ PWA offline (after first model load ~90MB)
 //
-// AI concept:
-//   Retrieval Augmented Generation (RAG)
+// AI concept — RAG (Retrieval Augmented Generation):
 //   1. Page text collected and split into chunks
 //   2. Each chunk converted to vector (embedding)
 //   3. Question converted to vector
 //   4. Cosine similarity finds most relevant chunks
 //   5. QA model answers from relevant chunks only
 //
-// Model used:
-//   Embeddings: Xenova/all-MiniLM-L6-v2 (~23MB) — English
+// Models:
+//   Embeddings: Xenova/all-MiniLM-L6-v2 (~23MB)
 //   QA:         Xenova/distilbert-base-cased-distilled-squad (~67MB)
-//
-// First load: downloads models to browser cache (~90MB total)
-// After that: works fully offline — zero internet needed
 //
 // Zero API keys. Zero cost. No data leaves the browser.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,23 +32,20 @@ export interface RagResult {
   error?:  string
 }
 
-// ── Module-level cache — models loaded once per session
+// ── Module-level cache — loaded once per session
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let embeddingPipeline: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let qaPipeline: any        = null
+let qaPipeline:        any = null
 let modelsLoading          = false
 let modelsLoaded           = false
 
 // ─────────────────────────────────────────────────────────────────────────────
-// loadModels
-// Downloads and caches Transformers.js models in browser.
-// Called once — subsequent calls use cached models.
+// loadModels — downloads and caches models in browser on first call
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadModels(): Promise<void> {
-  if (modelsLoaded)  return
+  if (modelsLoaded) return
   if (modelsLoading) {
-    // Wait for ongoing load to finish
     while (modelsLoading) await new Promise(r => setTimeout(r, 200))
     return
   }
@@ -61,28 +53,40 @@ async function loadModels(): Promise<void> {
   modelsLoading = true
 
   try {
-    // Dynamic import — Transformers.js is large, load only when needed
-    const { pipeline } = await import("@xenova/transformers")
+    // ── FIXED: use @huggingface/transformers not @xenova/transformers ──
+    // @xenova/transformers is deprecated. Use @huggingface/transformers v3+
+    const { pipeline, env } = await import("@huggingface/transformers")
 
-    // Load embedding model — converts text to vectors
-    // Xenova/all-MiniLM-L6-v2 — fast, small, good quality
+    // Allow model downloads from Hugging Face CDN
+    env.allowRemoteModels  = true
+    env.allowLocalModels   = false
+    env.useBrowserCache    = true   // cache models in IndexedDB after first load
+
+    // Embedding model — converts text to semantic vectors
     embeddingPipeline = await pipeline(
       "feature-extraction",
       "Xenova/all-MiniLM-L6-v2",
-      { device: "webgpu" }          // uses WebGPU if available, falls back to CPU
+      {
+        // Use WebGPU if available for speed, fallback to WASM/CPU
+        device: typeof navigator !== "undefined" && "gpu" in navigator
+          ? "webgpu"
+          : "wasm",
+      }
     )
 
-    // Load QA model — answers questions from context
-    // DistilBERT — small and fast, good for extractive QA
+    // QA model — extracts answers from context
     qaPipeline = await pipeline(
       "question-answering",
       "Xenova/distilbert-base-cased-distilled-squad",
-      { device: "webgpu" }
+      {
+        device: typeof navigator !== "undefined" && "gpu" in navigator
+          ? "webgpu"
+          : "wasm",
+      }
     )
 
     modelsLoaded  = true
     modelsLoading = false
-
     console.log("yuktai: Transformers.js models loaded ✅")
 
   } catch (err) {
@@ -93,8 +97,7 @@ async function loadModels(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// waitForContent
-// Waits for React/SPA dynamic content to finish rendering
+// waitForContent — waits for React/SPA dynamic content to render
 // ─────────────────────────────────────────────────────────────────────────────
 function waitForContent(): Promise<void> {
   return new Promise(resolve => {
@@ -108,8 +111,7 @@ function waitForContent(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// getPageText
-// Collects all visible text from the page — skips yuktai panel
+// getPageText — collects all visible text, skips yuktai panel
 // ─────────────────────────────────────────────────────────────────────────────
 function getPageText(): string {
   const texts: string[] = []
@@ -117,99 +119,74 @@ function getPageText(): string {
 
   for (const el of elements) {
     if (el.closest("[data-yuktai-panel]")) continue
-
     const text = el.innerText?.trim()
     if (text && text.length > 30) texts.push(text)
-
     const aria = el.getAttribute("aria-label")
     if (aria && aria.length > 10) texts.push(aria)
-
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
       if (el.placeholder) texts.push(el.placeholder)
     }
   }
 
-  return texts.join(" ").slice(0, 8000)  // more chars — Transformers handles it
+  return texts.join(" ").slice(0, 8000)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// chunkText
-// Splits page text into overlapping chunks for better retrieval
+// chunkText — splits page text into overlapping chunks
 // ─────────────────────────────────────────────────────────────────────────────
-function chunkText(text: any, chunkSize = 200, overlap = 50): string[] {
-// ✅ Ensure string
-if (typeof text !== "string") {
-try {
-text = String(text ?? "")
-} catch {
-return []
-}
-}
+function chunkText(text: unknown, chunkSize = 200, overlap = 50): string[] {
+  if (typeof text !== "string") {
+    try { text = String(text ?? "") } catch { return [] }
+  }
+  const str = (text as string).trim()
+  if (!str) return []
 
-text = text.trim()
-if (!text) return []
+  const safeOverlap = Math.min(overlap, Math.floor(chunkSize / 2))
+  const words       = str.split(/\s+/)
+  const chunks: string[] = []
+  const step = chunkSize - safeOverlap
 
-// ✅ Prevent infinite loop
-if (chunkSize <= overlap) {
-overlap = Math.floor(chunkSize / 2)
-}
+  for (let i = 0; i < words.length; i += step) {
+    const chunk = words.slice(i, i + chunkSize).join(" ")
+    if (chunk.trim().length > 20) chunks.push(chunk)
+  }
 
-const words = text.split(/\s+/)
-const chunks: string[] = []
-
-const step = chunkSize - overlap
-
-for (let i = 0; i < words.length; i += step) {
-const chunk = words.slice(i, i + chunkSize).join(" ")
-if (chunk && chunk.trim().length > 20) {
-chunks.push(chunk)
-}
-}
-
-return chunks
+  return chunks
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// cosineSimilarity
-// Measures how similar two vectors are — 1.0 = identical, 0 = unrelated
+// cosineSimilarity — measures semantic similarity between two vectors
 // ─────────────────────────────────────────────────────────────────────────────
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0, normA = 0, normB = 0
-
   for (let i = 0; i < a.length; i++) {
     dot   += a[i] * b[i]
     normA += a[i] * a[i]
     normB += b[i] * b[i]
   }
-
   return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-8)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// embed
-// Converts text to a vector using the embedding model
+// embed — converts text to a semantic vector
 // ─────────────────────────────────────────────────────────────────────────────
 async function embed(text: string): Promise<number[]> {
-  const output = await embeddingPipeline(text, {
-    pooling:   "mean",
-    normalize: true,
-  })
-  return Array.from(output.data as Float32Array)
+  const output = await embeddingPipeline(text, { pooling: "mean", normalize: true })
+  // @huggingface/transformers v3 returns .data directly as Float32Array
+  const data = output?.data ?? output
+  return Array.from(data as Float32Array)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// findRelevantChunks
-// Semantic search — finds top N chunks most relevant to the question
+// findRelevantChunks — semantic search to find top N relevant chunks
 // ─────────────────────────────────────────────────────────────────────────────
 async function findRelevantChunks(
   question: string,
   chunks:   string[],
   topN = 3
 ): Promise<string[]> {
-  // Embed the question
   const questionVector = await embed(question)
 
-  // Embed all chunks and score them
   const scored = await Promise.all(
     chunks.map(async chunk => {
       const chunkVector = await embed(chunk)
@@ -218,23 +195,12 @@ async function findRelevantChunks(
     })
   )
 
-  // Sort by relevance — highest score first
   scored.sort((a, b) => b.score - a.score)
-
-  // Return top N most relevant chunks
   return scored.slice(0, topN).map(s => s.chunk)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// askPageWithTransformers
-// Main RAG function using Transformers.js — works on all devices
-//
-// Flow:
-//   1. Load models (cached after first load)
-//   2. Get page text
-//   3. Split into chunks
-//   4. Find relevant chunks via semantic search
-//   5. QA model answers from relevant chunks
+// askPageWithTransformers — main RAG function for mobile and all browsers
 // ─────────────────────────────────────────────────────────────────────────────
 export async function askPageWithTransformers(
   question: string
@@ -244,70 +210,43 @@ export async function askPageWithTransformers(
   }
 
   try {
-    // Load models — first call downloads, subsequent calls use cache
     await loadModels()
-
-    // Wait for SPA content to render
     await waitForContent()
 
-    // Get all page text
     const pageText = getPageText()
-
     if (!pageText || pageText.length < 50) {
-      return {
-        success: false,
-        answer:  "",
-        error:   "Not enough content on this page to answer from.",
-      }
+      return { success: false, answer: "", error: "Not enough content on this page." }
     }
 
-    // Split into chunks
     const chunks = chunkText(pageText)
-
     if (chunks.length === 0) {
       return { success: false, answer: "", error: "Could not process page content." }
     }
 
-    // Find most relevant chunks via semantic search
     const relevantChunks = await findRelevantChunks(question, chunks, 3)
+    const context        = relevantChunks.join(" ... ")
 
-    // Combine top chunks into context for QA model
-    const context = relevantChunks.join(" ... ")
-
-    // QA model answers from the relevant context only
-    const result = await qaPipeline({
-      question,
-      context,
-    })
+    // @huggingface/transformers v3 QA API
+    const result = await qaPipeline(question, context)
 
     if (!result?.answer || result.answer.trim().length === 0) {
-      return {
-        success: true,
-        answer:  "I could not find a specific answer on this page.",
-      }
+      return { success: true, answer: "I could not find a specific answer on this page." }
     }
 
-    return {
-      success: true,
-      answer:  result.answer.trim(),
-    }
+    return { success: true, answer: result.answer.trim() }
 
   } catch (error) {
     console.error("yuktai: Transformers RAG error", error)
     return {
       success: false,
       answer:  "",
-      error:   error instanceof Error
-        ? error.message
-        : "Transformers.js error — please try again.",
+      error:   error instanceof Error ? error.message : "Transformers.js error.",
     }
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// isTransformersSupported
-// Checks if the browser can run Transformers.js
-// Requires: WebAssembly support (all modern browsers)
+// isTransformersSupported — checks WebAssembly + Worker support
 // ─────────────────────────────────────────────────────────────────────────────
 export function isTransformersSupported(): boolean {
   try {
@@ -319,7 +258,6 @@ export function isTransformersSupported(): boolean {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // getModelLoadStatus
-// Returns current model loading status for UI feedback
 // ─────────────────────────────────────────────────────────────────────────────
 export function getModelLoadStatus(): "idle" | "loading" | "ready" {
   if (modelsLoaded)  return "ready"
