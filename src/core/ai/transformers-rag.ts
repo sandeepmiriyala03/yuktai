@@ -58,9 +58,15 @@ async function loadModels(): Promise<void> {
     const { pipeline, env } = await import("@huggingface/transformers")
 
     // Allow model downloads from Hugging Face CDN
-    env.allowRemoteModels  = true
-    env.allowLocalModels   = false
-    env.useBrowserCache    = true   // cache models in IndexedDB after first load
+   env.allowRemoteModels = true
+env.allowLocalModels  = false
+
+// Browser cache only works in browser context — not SSR
+if (typeof window !== "undefined" && typeof caches !== "undefined") {
+  env.useBrowserCache = true
+} else {
+  env.useBrowserCache = false
+}
 
     // Embedding model — converts text to semantic vectors
     embeddingPipeline = await pipeline(
