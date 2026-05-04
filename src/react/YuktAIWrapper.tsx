@@ -1,18 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/react/YuktAIWrapper.tsx
-// yuktai v3.0.9 — Yuktishaalaa AI Lab
+// yuktai v3.1.0 — Yuktishaalaa AI Lab
 //
-// Two floating buttons:
-//   ♿  — Accessibility panel (bottom)
-//   💬  — RAG Ask panel (above ♿, shown when showRag={true})
-//
-// RAG engine auto-selected:
-//   Desktop Chrome + Gemini Nano → rag.ts (instant, no download)
-//   Mobile / All other browsers  → transformers-rag.ts (works offline)
+// Three floating buttons stacked vertically:
+//   🤖  ← Agent button (top)    — showAgent={true}
+//   💬  ← RAG button  (middle)  — showRag={true}
+//   ♿  ← A11y button (bottom)  — always shown
 //
 // Usage:
-//   <YuktAIWrapper position="left">                 — ♿ only
-//   <YuktAIWrapper position="left" showRag={true}>  — ♿ + 💬
+//   <YuktAIWrapper position="left">
+//   <YuktAIWrapper position="left" showRag={true}>
+//   <YuktAIWrapper position="left" showRag={true} showAgent={true}>
 // ─────────────────────────────────────────────────────────────────────────────
 
 "use client"
@@ -35,16 +33,15 @@ import {
 // Props
 // ─────────────────────────────────────────────────────────────────────────────
 export interface YuktAIWrapperProps {
-  position?: "left" | "right"
-  children:  ReactNode
-  config?:   Partial<A11yConfig>
-  showRag?:  boolean   // show 💬 RAG button — default false
+  position?:   "left" | "right"
+  children:    ReactNode
+  config?:     Partial<A11yConfig>
+  showRag?:    boolean   // show 💬 RAG button   — default false
+  showAgent?:  boolean   // show 🤖 Agent button — default false
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAISupport — checks Chrome Built-in AI (Gemini Nano)
-// Chrome 147+: window.LanguageModel / Summarizer / Rewriter / Writer
-// Chrome 127–146: window.ai.*
+// detectAISupport
 // ─────────────────────────────────────────────────────────────────────────────
 async function detectAISupport(): Promise<boolean> {
   try {
@@ -61,24 +58,14 @@ async function detectAISupport(): Promise<boolean> {
       } catch { /* continue */ }
     }
     if (w.Summarizer) {
-      try {
-        const s = await w.Summarizer.availability?.()
-        if (!s || s === "readily" || s === "available") return true
-      } catch { /* continue */ }
+      try { const s = await w.Summarizer.availability?.(); if (!s || s === "readily" || s === "available") return true } catch { /* continue */ }
     }
     if (w.Rewriter) {
-      try {
-        const s = await w.Rewriter.availability?.()
-        if (!s || s === "readily" || s === "available") return true
-      } catch { /* continue */ }
+      try { const s = await w.Rewriter.availability?.(); if (!s || s === "readily" || s === "available") return true } catch { /* continue */ }
     }
     if (w.Writer) {
-      try {
-        const s = await w.Writer.availability?.()
-        if (!s || s === "readily" || s === "available") return true
-      } catch { /* continue */ }
+      try { const s = await w.Writer.availability?.(); if (!s || s === "readily" || s === "available") return true } catch { /* continue */ }
     }
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ai = w.ai || (globalThis as any).ai
     if (ai) {
@@ -90,22 +77,21 @@ async function detectAISupport(): Promise<boolean> {
     }
     if (w.Translator || w.translation?.canTranslate) return true
     return false
-  } catch {
-    return false
-  }
+  } catch { return false }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // YuktAIWrapper
 // ─────────────────────────────────────────────────────────────────────────────
 export function YuktAIWrapper({
-  position = "left",
+  position    = "left",
   children,
-  config:  configOverrides = {},
-  showRag = false,
+  config:      configOverrides = {},
+  showRag    = false,
+  showAgent  = false,
 }: YuktAIWrapperProps) {
 
-  // ── Panel state ──
+  // ── Accessibility panel state ──
   const [panelOpen,      setPanelOpen]      = useState(false)
   const [settings,       setSettings]       = useState<WidgetSettings>(DEFAULT_SETTINGS)
   const [report,         setReport]         = useState<A11yReport | null>(null)
@@ -115,14 +101,32 @@ export function YuktAIWrapper({
   const panelRef                            = React.useRef<HTMLDivElement>(null)
 
   // ── RAG state ──
-  const [ragOpen,      setRagOpen]      = useState(false)
-  const [ragQuestion,  setRagQuestion]  = useState("")
-  const [ragAnswer,    setRagAnswer]    = useState("")
-  const [ragLoading,   setRagLoading]   = useState(false)
-  const [ragEngine,    setRagEngine]    = useState<"gemini" | "transformers" | null>(null)
-  const [modelStatus,  setModelStatus]  = useState<"idle" | "loading" | "ready">("idle")
+  const [ragOpen,     setRagOpen]     = useState(false)
+  const [ragQuestion, setRagQuestion] = useState("")
+  const [ragAnswer,   setRagAnswer]   = useState("")
+  const [ragLoading,  setRagLoading]  = useState(false)
+  const [ragEngine,   setRagEngine]   = useState<"gemini" | "transformers" | null>(null)
+  const [modelStatus, setModelStatus] = useState<"idle" | "loading" | "ready">("idle")
 
-  // ── Detect RAG engine on mount ──
+  // ── Agent state ──
+  const [agentOpen,    setAgentOpen]    = useState(false)
+  const [agentTask,    setAgentTask]    = useState("")
+  const [agentStatus,  setAgentStatus]  = useState("")
+  const [agentLoading, setAgentLoading] = useState(false)
+  const [agentSteps,   setAgentSteps]   = useState<string[]>([])
+  const [agentEngine,  setAgentEngine]  = useState<"gemini" | "transformers" | null>(null)
+
+  // ── Button positions ──
+  // ♿ always at bottom 24px
+  // 💬 at 84px (if shown)
+  // 🤖 at 144px (if both shown), or 84px (if only agent shown)
+  const a11yBottom   = 24
+  const ragBottom    = showAgent ? 84  : 84
+  const agentBottom  = showRag   ? 144 : 84
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Detect RAG engine
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -130,8 +134,10 @@ export function YuktAIWrapper({
     const hasGemini = !!(w.LanguageModel || w.ai?.languageModel)
     if (hasGemini && aiSupported) {
       setRagEngine("gemini")
+      setAgentEngine("gemini")
     } else if (isTransformersSupported()) {
       setRagEngine("transformers")
+      setAgentEngine("transformers")
     }
   }, [aiSupported])
 
@@ -142,20 +148,18 @@ export function YuktAIWrapper({
     return () => clearInterval(interval)
   }, [ragEngine])
 
-  // ── RAG ask handler — auto switches between Gemini Nano and Transformers.js ──
+  // ─────────────────────────────────────────────────────────────────────────
+  // RAG ask handler
+  // ─────────────────────────────────────────────────────────────────────────
   const handleRagAsk = useCallback(async () => {
     if (!ragQuestion.trim() || ragLoading) return
-    if (!ragEngine) {
-      setRagAnswer("⚠️ No AI engine available on this device.")
-      return
-    }
+    if (!ragEngine) { setRagAnswer("⚠️ No AI engine available."); return }
 
     setRagLoading(true)
     setRagAnswer("")
 
     try {
       let result
-
       if (ragEngine === "gemini") {
         const { askPage } = await import("../core/ai/rag")
         result = await askPage(ragQuestion)
@@ -165,43 +169,47 @@ export function YuktAIWrapper({
         result = await askPageWithTransformers(ragQuestion)
         setModelStatus("ready")
       }
-
       setRagAnswer(
         result.success && result.answer
-          ? result.answer
-              .replace(/\*\*(.*?)\*\*/g, "$1")
-              .replace(/\*(.*?)\*/g, "$1")
-              .replace(/#+\s/g, "")
-              .trim()
+          ? result.answer.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/#+\s/g, "").trim()
           : "⚠️ " + (result.error || "No answer found.")
       )
-    } catch {
-      setRagAnswer("⚠️ Something went wrong. Please try again.")
-    }
-
+    } catch { setRagAnswer("⚠️ Something went wrong.") }
     setRagLoading(false)
   }, [ragQuestion, ragLoading, ragEngine])
 
-  // ── Detect AI and voice on mount ──
+  // ─────────────────────────────────────────────────────────────────────────
+  // Agent handler — reads page, guides user through task
+  // ─────────────────────────────────────────────────────────────────────────
+ const handleAgentRun = useCallback(async () => {
+  if (!agentTask.trim() || agentLoading) return
+  if (!agentEngine) { setAgentStatus("⚠️ No AI engine available."); return }
+
+  setAgentLoading(true)
+  setAgentSteps([])
+  setAgentStatus("")
+
+  const { runAgent } = await import("../core/ai/agent")
+  await runAgent(agentTask, agentEngine, step => {
+    setAgentSteps(prev => [...prev, step.text])
+  })
+
+  setAgentLoading(false)
+  setAgentStatus("done")
+}, [agentTask, agentLoading, agentEngine])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Detect AI + voice on mount
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return
-
     const run = async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const w = window as any
-      console.log("yuktai: Checking AI APIs...")
-      console.log("yuktai: window.LanguageModel =", w.LanguageModel)
-
       const supported = await detectAISupport()
       setAiSupported(supported)
-      console.log(supported
-        ? "yuktai: Chrome Built-in AI detected ✅"
-        : "yuktai: Chrome Built-in AI not detected — Transformers.js will handle RAG on mobile"
-      )
-
       setVoiceSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition))
     }
-
     const timer = setTimeout(run, 800)
     return () => clearTimeout(timer)
   }, [])
@@ -254,70 +262,218 @@ export function YuktAIWrapper({
     setSettings(prev => ({ ...prev, [key]: val }))
   }, [])
 
+  // Escape closes all panels
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { if (panelOpen) setPanelOpen(false); if (ragOpen) setRagOpen(false) }
+      if (e.key === "Escape") {
+        if (panelOpen)  setPanelOpen(false)
+        if (ragOpen)    setRagOpen(false)
+        if (agentOpen)  setAgentOpen(false)
+      }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [panelOpen, ragOpen])
+  }, [panelOpen, ragOpen, agentOpen])
 
   useEffect(() => {
     if (panelOpen && panelRef.current) wcagPlugin.trapFocus(panelRef.current)
   }, [panelOpen])
 
-  // ── RAG loading message ──
-  const ragLoadingMsg = ragEngine === "transformers" && modelStatus === "loading"
-    ? "Loading AI... (first time only)"
-    : "..."
+  // ── Shared FAB base style ──
+  const fabBase = (bottom: number, bg: string, active: boolean): React.CSSProperties => ({
+    position:       "fixed",
+    bottom:         `${bottom}px`,
+    [position]:     "24px",
+    zIndex:         9998,
+    width:          "52px",
+    height:         "52px",
+    borderRadius:   "50%",
+    background:     active ? bg : bg,
+    color:          "#fff",
+    border:         "none",
+    cursor:         "pointer",
+    fontSize:       "22px",
+    display:        "flex",
+    alignItems:     "center",
+    justifyContent: "center",
+    boxShadow:      "0 4px 16px rgba(0,0,0,0.25)",
+    transition:     "transform 0.15s, background 0.2s",
+  })
 
-  // ── RAG panel subtitle ──
+  const hover = (e: React.MouseEvent<HTMLButtonElement>) => {
+    (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"
+  }
+  const unhover = (e: React.MouseEvent<HTMLButtonElement>) => {
+    (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"
+  }
+
+  // ── RAG subtitle ──
   const ragSubtitle = ragEngine === "gemini"
-    ? "Gemini Nano · On device · Instant"
+    ? "Gemini Nano · On device"
     : ragEngine === "transformers"
-    ? "Transformers.js · All devices · Offline"
-    : "Detecting engine..."
+    ? "Transformers.js · All devices"
+    : "Detecting..."
 
-  // ── FAB styles ──
-  const fabStyle: React.CSSProperties = {
-    position: "fixed", bottom: "24px", [position]: "24px", zIndex: 9998,
-    width: "52px", height: "52px", borderRadius: "50%",
-    background: isActive ? "#0d9488" : "#1a73e8",
-    color: "#fff", border: "none", cursor: "pointer", fontSize: "22px",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "transform 0.15s, background 0.2s",
-  }
-
-  const ragFabStyle: React.CSSProperties = {
-    position: "fixed", bottom: "84px", [position]: "24px", zIndex: 9998,
-    width: "52px", height: "52px", borderRadius: "50%",
-    background: ragOpen ? "#7c3aed" : "#6d28d9",
-    color: "#fff", border: "none", cursor: "pointer", fontSize: "22px",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "transform 0.15s, background 0.2s",
-  }
+  const ragLoadingMsg = ragEngine === "transformers" && modelStatus === "loading"
+    ? "Loading model..."
+    : "..."
 
   return (
     <>
       {children}
 
-      {/* ── 💬 RAG button — shown when showRag={true} ── */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* 🤖 AGENT FLOATING BUTTON                                        */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {showAgent && (
+        <button
+          style={fabBase(agentBottom, agentOpen ? "#059669" : "#10b981", agentOpen)}
+          aria-label="Open AI agent"
+          aria-haspopup="dialog"
+          aria-expanded={agentOpen}
+          title="🤖 AI Agent — guide me through this page"
+          onClick={() => { setAgentOpen(p => !p); setRagOpen(false); setPanelOpen(false) }}
+          onMouseEnter={hover}
+          onMouseLeave={unhover}
+        >
+          🤖
+        </button>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* 🤖 AGENT PANEL                                                  */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {showAgent && agentOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="yuktai AI Agent"
+          data-yuktai-panel="true"
+          style={{
+            position:     "fixed",
+            bottom:       `${agentBottom + 64}px`,
+            [position]:   "24px",
+            zIndex:       9999,
+            width:        "300px",
+            maxWidth:     "calc(100vw - 48px)",
+            background:   "#fff",
+            border:       "1px solid #e2e8f0",
+            borderRadius: "16px",
+            boxShadow:    "0 8px 32px rgba(0,0,0,0.12)",
+            fontFamily:   "system-ui,-apple-system,sans-serif",
+            padding:      "14px",
+            maxHeight:    "70vh",
+            overflowY:    "auto",
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+            <div>
+              <p style={{ margin: "0 0 2px", fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>🤖 AI Agent</p>
+              <p style={{ margin: 0, fontSize: "10px", color: "#10b981" }}>
+                {agentEngine === "gemini" ? "Gemini Nano · On device" : agentEngine === "transformers" ? "Transformers.js · All devices" : "Detecting..."}
+              </p>
+            </div>
+            <button onClick={() => setAgentOpen(false)} aria-label="Close agent panel"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "18px", lineHeight: 1, padding: "2px" }}>
+              ×
+            </button>
+          </div>
+
+          {/* What can I help with */}
+          <p style={{ margin: "0 0 8px", fontSize: "11px", color: "#64748b" }}>
+            Tell me what you want to do on this page. I will guide you step by step.
+          </p>
+
+          {/* Example tasks */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
+            {["Fill this form", "Find contact info", "What is this page?", "Guide me to apply"].map(eg => (
+              <button key={eg} onClick={() => setAgentTask(eg)}
+                style={{ padding: "3px 8px", borderRadius: "20px", fontSize: "10px", border: "1px solid #e2e8f0", background: "#f8fafc", color: "#64748b", cursor: "pointer" }}>
+                {eg}
+              </button>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+            <input
+              type="text"
+              value={agentTask}
+              onChange={e => setAgentTask(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleAgentRun() }}
+              placeholder="e.g. Help me fill this form"
+              disabled={agentLoading || !agentEngine}
+              aria-label="Tell the agent what to do"
+              style={{ flex: 1, padding: "8px 10px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "12px", color: "#0f172a", background: agentEngine ? "#fff" : "#f8fafc", outline: "none", height: "36px" }}
+            />
+            <button
+              onClick={handleAgentRun}
+              disabled={agentLoading || !agentTask.trim() || !agentEngine}
+              aria-label="Run agent"
+              style={{
+                padding:      "8px 12px",
+                borderRadius: "8px",
+                border:       "none",
+                background:   agentEngine && agentTask.trim() && !agentLoading ? "#10b981" : "#e2e8f0",
+                color:        agentEngine && agentTask.trim() && !agentLoading ? "#fff" : "#94a3b8",
+                fontSize:     "12px",
+                fontWeight:   600,
+                cursor:       agentEngine && agentTask.trim() && !agentLoading ? "pointer" : "not-allowed",
+                height:       "36px",
+                minWidth:     "52px",
+                transition:   "background 0.2s",
+              }}
+            >
+              {agentLoading ? "..." : "Go"}
+            </button>
+          </div>
+
+          {/* Steps output */}
+          {agentSteps.length > 0 && (
+            <div style={{ padding: "10px 12px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "8px", fontSize: "11px", color: "#166534", lineHeight: 1.7 }}>
+              {agentSteps.map((step, i) => (
+                <p key={i} style={{ margin: "0 0 2px" }}>{step}</p>
+              ))}
+              {agentStatus === "done" && (
+                <button
+                  onClick={() => { setAgentSteps([]); setAgentTask(""); setAgentStatus("") }}
+                  style={{ display: "block", marginTop: "6px", background: "none", border: "none", color: "#94a3b8", fontSize: "10px", cursor: "pointer", padding: 0 }}>
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
+          {!agentEngine && (
+            <p style={{ margin: "4px 0 0", fontSize: "10px", color: "#94a3b8" }}>
+              Enable Gemini Nano via chrome://flags for best results.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* 💬 RAG FLOATING BUTTON                                          */}
+      {/* ─────────────────────────────────────────────────────────────── */}
       {showRag && (
         <button
-          style={ragFabStyle}
+          style={fabBase(ragBottom, ragOpen ? "#7c3aed" : "#6d28d9", ragOpen)}
           aria-label="Ask a question about this page"
           aria-haspopup="dialog"
           aria-expanded={ragOpen}
-          title={`Ask this page · ${ragSubtitle}`}
-          onClick={() => { setRagOpen(p => !p); setPanelOpen(false) }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)" }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)" }}
+          title={`💬 Ask this page · ${ragSubtitle}`}
+          onClick={() => { setRagOpen(p => !p); setPanelOpen(false); setAgentOpen(false) }}
+          onMouseEnter={hover}
+          onMouseLeave={unhover}
         >
           💬
         </button>
       )}
 
-      {/* ── 💬 RAG mini panel ── */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* 💬 RAG PANEL                                                    */}
+      {/* ─────────────────────────────────────────────────────────────── */}
       {showRag && ragOpen && (
         <div
           role="dialog"
@@ -325,38 +481,37 @@ export function YuktAIWrapper({
           aria-label="Ask this page"
           data-yuktai-panel="true"
           style={{
-            position: "fixed", bottom: "148px", [position]: "24px", zIndex: 9999,
-            width: "300px", maxWidth: "calc(100vw - 48px)",
-            background: "#fff", border: "1px solid #e2e8f0",
-            borderRadius: "16px", boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
-            fontFamily: "system-ui,-apple-system,sans-serif", padding: "14px",
+            position:     "fixed",
+            bottom:       `${ragBottom + 64}px`,
+            [position]:   "24px",
+            zIndex:       9999,
+            width:        "300px",
+            maxWidth:     "calc(100vw - 48px)",
+            background:   "#fff",
+            border:       "1px solid #e2e8f0",
+            borderRadius: "16px",
+            boxShadow:    "0 8px 32px rgba(0,0,0,0.12)",
+            fontFamily:   "system-ui,-apple-system,sans-serif",
+            padding:      "14px",
           }}
         >
-          {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
             <div>
               <p style={{ margin: "0 0 2px", fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>💬 Ask this page</p>
-              <p style={{ margin: 0, fontSize: "10px", color: ragEngine === "gemini" ? "#0d9488" : "#7c3aed" }}>
-                {ragSubtitle}
-              </p>
+              <p style={{ margin: 0, fontSize: "10px", color: "#7c3aed" }}>{ragSubtitle}</p>
               {ragEngine === "transformers" && modelStatus === "loading" && (
-                <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#94a3b8" }}>
-                  Downloading AI model — first time only (~90MB)
-                </p>
+                <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#94a3b8" }}>Downloading model — first time only</p>
               )}
               {ragEngine === "transformers" && modelStatus === "ready" && (
-                <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#0d9488" }}>
-                  Model ready ✅ — works offline now
-                </p>
+                <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#10b981" }}>Model ready ✅ — works offline</p>
               )}
             </div>
             <button onClick={() => setRagOpen(false)} aria-label="Close ask panel"
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "18px", lineHeight: 1, padding: "2px", borderRadius: "4px" }}>
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "18px", lineHeight: 1, padding: "2px" }}>
               ×
             </button>
           </div>
 
-          {/* Input */}
           <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
             <input
               type="text"
@@ -385,7 +540,6 @@ export function YuktAIWrapper({
             </button>
           </div>
 
-          {/* Answer */}
           {ragAnswer && (
             <div style={{ padding: "10px", background: "#f5f3ff", borderRadius: "8px", fontSize: "12px", color: "#4c1d95", lineHeight: 1.6, maxHeight: "180px", overflowY: "auto" }}>
               <strong style={{ display: "block", marginBottom: "4px", fontSize: "11px", color: "#7c3aed" }}>💬 Answer</strong>
@@ -396,30 +550,30 @@ export function YuktAIWrapper({
               </button>
             </div>
           )}
-
-          {!ragEngine && (
-            <p style={{ margin: "4px 0 0", fontSize: "10px", color: "#94a3b8" }}>
-              Detecting AI engine...
-            </p>
-          )}
+          {!ragEngine && <p style={{ margin: "4px 0 0", fontSize: "10px", color: "#94a3b8" }}>Detecting AI engine...</p>}
         </div>
       )}
 
-      {/* ── ♿ Accessibility button ── */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* ♿ ACCESSIBILITY FLOATING BUTTON                                 */}
+      {/* ─────────────────────────────────────────────────────────────── */}
       <button
-        style={fabStyle}
+        style={fabBase(a11yBottom, isActive ? "#0d9488" : "#1a73e8", panelOpen)}
         aria-label="Open accessibility preferences"
         aria-haspopup="dialog"
         aria-expanded={panelOpen}
         data-yuktai-pref-toggle="true"
-        onClick={() => { setPanelOpen(p => !p); setRagOpen(false) }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)" }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)" }}
+        title="♿ Accessibility settings"
+        onClick={() => { setPanelOpen(p => !p); setRagOpen(false); setAgentOpen(false) }}
+        onMouseEnter={hover}
+        onMouseLeave={unhover}
       >
         ♿
       </button>
 
-      {/* ── Accessibility panel ── */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* ♿ ACCESSIBILITY PANEL                                           */}
+      {/* ─────────────────────────────────────────────────────────────── */}
       {panelOpen && (
         <WidgetPanel
           ref={panelRef}

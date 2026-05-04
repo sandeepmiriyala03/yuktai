@@ -316,7 +316,7 @@ export const WidgetPanel = forwardRef<HTMLDivElement, Props>(
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "4px", flexWrap: "wrap" }}>
               <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "99px", background: "#f0fdfa", color: "#0d9488", letterSpacing: "0.05em", fontFamily: "monospace" }}>
-                @yuktishaalaa/yuktai v2.1.0
+                @yuktishaalaa/yuktai
               </span>
               {isActive && (
                 <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "99px", background: "#f0fdfa", color: "#0f766e", border: "1px solid #99f6e4" }}>
