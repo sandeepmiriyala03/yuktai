@@ -1,27 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/transformers-rag.ts
-// yuktai v3.0.9 — Yuktishaalaa AI Lab
+// yuktai v3.0.12 — Yuktishaalaa AI Lab
 //
-// Mobile RAG — Ask any question about the current page.
-// Uses @huggingface/transformers — runs entirely in the browser.
+// Mobile RAG — fixed for all devices.
+//
+// Fixes in v3.0.12:
+//   1. WebGPU detection was crashing on mobile — now safely falls back to wasm
+//   2. Switched from DistilBERT (extractive) to flan-t5-small (generative)
+//      DistilBERT only extracted short spans — "Akshar" instead of full answer
+//      flan-t5-small generates full sentence answers like Gemini Nano
+//   3. Context limit increased to 1500 chars for better answers
+//   4. env.useBrowserCache guarded against SSR
 //
 // Works on:
 //   ✅ Mobile Chrome (Android)
 //   ✅ Mobile Safari (iOS)
-//   ✅ Desktop Chrome (any browser without Gemini Nano)
-//   ✅ Firefox, Edge, Samsung Internet
-//   ✅ PWA offline (after first model load ~90MB)
-//
-// AI concept — RAG (Retrieval Augmented Generation):
-//   1. Page text collected and split into chunks
-//   2. Each chunk converted to vector (embedding)
-//   3. Question converted to vector
-//   4. Cosine similarity finds most relevant chunks
-//   5. QA model answers from relevant chunks only
+//   ✅ Desktop Chrome / Firefox / Edge
+//   ✅ PWA offline (after first model load)
 //
 // Models:
 //   Embeddings: Xenova/all-MiniLM-L6-v2 (~23MB)
-//   QA:         Xenova/distilbert-base-cased-distilled-squad (~67MB)
+//   QA:         Xenova/flan-t5-small (~80MB) — generative, full sentence answers
 //
 // Zero API keys. Zero cost. No data leaves the browser.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,12 +35,30 @@ export interface RagResult {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let embeddingPipeline: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let qaPipeline:        any = null
-let modelsLoading          = false
-let modelsLoaded           = false
+let generativePipeline: any = null
+let modelsLoading           = false
+let modelsLoaded            = false
 
 // ─────────────────────────────────────────────────────────────────────────────
-// loadModels — downloads and caches models in browser on first call
+// safeDevice — returns "webgpu" if supported, "wasm" otherwise
+// ── FIX: "gpu" in navigator was crashing on mobile Safari and Android
+// ─────────────────────────────────────────────────────────────────────────────
+function safeDevice(): string {
+  try {
+    if (
+      typeof navigator !== "undefined" &&
+      "gpu" in navigator &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (navigator as any).gpu !== undefined
+    ) {
+      return "webgpu"
+    }
+  } catch { /* ignore */ }
+  return "wasm"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// loadModels — downloads and caches models on first call
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadModels(): Promise<void> {
   if (modelsLoaded) return
@@ -53,42 +70,35 @@ async function loadModels(): Promise<void> {
   modelsLoading = true
 
   try {
-    // ── FIXED: use @huggingface/transformers not @xenova/transformers ──
-    // @xenova/transformers is deprecated. Use @huggingface/transformers v3+
     const { pipeline, env } = await import("@huggingface/transformers")
 
-    // Allow model downloads from Hugging Face CDN
-   env.allowRemoteModels = true
-env.allowLocalModels  = false
+    env.allowRemoteModels = true
+    env.allowLocalModels  = false
 
-// Browser cache only works in browser context — not SSR
-if (typeof window !== "undefined" && typeof caches !== "undefined") {
-  env.useBrowserCache = true
-} else {
-  env.useBrowserCache = false
-}
+    // ── FIX: guard against SSR / server context ──
+    if (typeof window !== "undefined" && typeof caches !== "undefined") {
+      env.useBrowserCache = true
+    } else {
+      env.useBrowserCache = false
+    }
+
+    const device = safeDevice()
+    console.log("yuktai: Transformers.js using device:", device)
 
     // Embedding model — converts text to semantic vectors
     embeddingPipeline = await pipeline(
       "feature-extraction",
       "Xenova/all-MiniLM-L6-v2",
-      {
-        // Use WebGPU if available for speed, fallback to WASM/CPU
-        device: typeof navigator !== "undefined" && "gpu" in navigator
-          ? "webgpu"
-          : "wasm",
-      }
+      { device }
     )
 
-    // QA model — extracts answers from context
-    qaPipeline = await pipeline(
-      "question-answering",
-      "Xenova/distilbert-base-cased-distilled-squad",
-      {
-        device: typeof navigator !== "undefined" && "gpu" in navigator
-          ? "webgpu"
-          : "wasm",
-      }
+    // ── FIX: switched from DistilBERT to flan-t5-small ──
+    // DistilBERT is extractive — only returns short spans like "Akshar"
+    // flan-t5-small is generative — returns full sentence answers
+    generativePipeline = await pipeline(
+      "text2text-generation",
+      "Xenova/flan-t5-small",
+      { device }
     )
 
     modelsLoaded  = true
@@ -121,17 +131,118 @@ function waitForContent(): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 function getPageText(): string {
   const texts: string[] = []
-  const elements = document.querySelectorAll<HTMLElement>("*")
+  const seen  = new Set<string>()
+
+  // ── ALL possible text-bearing DOM elements ──
+  const elements = document.querySelectorAll<HTMLElement>(`
+    p, h1, h2, h3, h4, h5, h6,
+    li, ul, ol, dl, dt, dd,
+    td, th, tr, caption,
+    blockquote, q, cite,
+    figcaption, figure,
+    label, legend, fieldset,
+    span, a, b, strong, em, i, u, s, mark, small,
+    abbr, acronym, dfn, code, pre, kbd, samp, var,
+    article, section, main, aside, nav, header, footer,
+    div, button, summary, details,
+    time, address, bdi, bdo,
+    ins, del, sub, sup,
+    title, caption
+  `)
 
   for (const el of elements) {
+    // Skip yuktai panel — never read our own UI
     if (el.closest("[data-yuktai-panel]")) continue
+
+    // Skip hidden elements
+    const style = window.getComputedStyle(el)
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") continue
+
+    // Skip elements that have block children — avoids parent duplicating child text
+    const hasBlockChild = el.querySelector("p, h1, h2, h3, h4, h5, h6, li, td, div, article, section")
+    if (hasBlockChild) continue
+
     const text = el.innerText?.trim()
-    if (text && text.length > 30) texts.push(text)
-    const aria = el.getAttribute("aria-label")
-    if (aria && aria.length > 10) texts.push(aria)
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      if (el.placeholder) texts.push(el.placeholder)
+    if (!text || text.length < 15) continue
+
+    if (seen.has(text)) continue
+    seen.add(text)
+    texts.push(text)
+
+    // aria-label
+    const aria = el.getAttribute("aria-label")?.trim()
+    if (aria && aria.length > 8 && aria !== text && !seen.has(aria)) {
+      seen.add(aria)
+      texts.push(aria)
     }
+
+    // aria-description
+    const ariaDesc = el.getAttribute("aria-description")?.trim()
+    if (ariaDesc && ariaDesc.length > 8 && !seen.has(ariaDesc)) {
+      seen.add(ariaDesc)
+      texts.push(ariaDesc)
+    }
+
+    // title attribute
+    const title = el.getAttribute("title")?.trim()
+    if (title && title.length > 8 && title !== text && !seen.has(title)) {
+      seen.add(title)
+      texts.push(title)
+    }
+
+    // alt text on images inside element
+    el.querySelectorAll<HTMLImageElement>("img").forEach(img => {
+      const alt = img.getAttribute("alt")?.trim()
+      if (alt && alt.length > 8 && !seen.has(alt)) {
+        seen.add(alt)
+        texts.push(alt)
+      }
+    })
+  }
+
+  // ── Inputs and textareas — placeholders + values ──
+  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    "input, textarea"
+  ).forEach(el => {
+    if (el.closest("[data-yuktai-panel]")) return
+    if (el.placeholder && !seen.has(el.placeholder)) {
+      seen.add(el.placeholder)
+      texts.push(el.placeholder)
+    }
+    if (el.value && el.value.length > 10 && !seen.has(el.value)) {
+      seen.add(el.value)
+      texts.push(el.value)
+    }
+  })
+
+  // ── Select options ──
+  document.querySelectorAll<HTMLSelectElement>("select").forEach(el => {
+    if (el.closest("[data-yuktai-panel]")) return
+    Array.from(el.options).forEach(opt => {
+      const optText = opt.text?.trim()
+      if (optText && optText.length > 5 && !seen.has(optText)) {
+        seen.add(optText)
+        texts.push(optText)
+      }
+    })
+  })
+
+  // ── Meta tags — page description and keywords ──
+  document.querySelectorAll<HTMLMetaElement>(
+    'meta[name="description"], meta[name="keywords"], meta[property="og:title"], meta[property="og:description"]'
+  ).forEach(meta => {
+    const content = meta.getAttribute("content")?.trim()
+    if (content && content.length > 10 && !seen.has(content)) {
+      seen.add(content)
+      texts.push(content)
+    }
+  })
+
+  // ── Document title ──
+  const docTitle = document.title?.trim()
+  if (docTitle && !seen.has(docTitle)) {
+    seen.add(docTitle)
+    texts.unshift(docTitle) // put title first — most important
   }
 
   return texts.join(" ").slice(0, 8000)
@@ -161,7 +272,7 @@ function chunkText(text: unknown, chunkSize = 200, overlap = 50): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// cosineSimilarity — measures semantic similarity between two vectors
+// cosineSimilarity
 // ─────────────────────────────────────────────────────────────────────────────
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0, normA = 0, normB = 0
@@ -178,18 +289,17 @@ function cosineSimilarity(a: number[], b: number[]): number {
 // ─────────────────────────────────────────────────────────────────────────────
 async function embed(text: string): Promise<number[]> {
   const output = await embeddingPipeline(text, { pooling: "mean", normalize: true })
-  // @huggingface/transformers v3 returns .data directly as Float32Array
-  const data = output?.data ?? output
+  const data   = output?.data ?? output
   return Array.from(data as Float32Array)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// findRelevantChunks — semantic search to find top N relevant chunks
+// findRelevantChunks — semantic search for top N most relevant chunks
 // ─────────────────────────────────────────────────────────────────────────────
 async function findRelevantChunks(
   question: string,
   chunks:   string[],
-  topN = 3
+  topN = 5
 ): Promise<string[]> {
   const questionVector = await embed(question)
 
@@ -206,7 +316,7 @@ async function findRelevantChunks(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// askPageWithTransformers — main RAG function for mobile and all browsers
+// askPageWithTransformers — main RAG function
 // ─────────────────────────────────────────────────────────────────────────────
 export async function askPageWithTransformers(
   question: string
@@ -229,17 +339,32 @@ export async function askPageWithTransformers(
       return { success: false, answer: "", error: "Could not process page content." }
     }
 
-    const relevantChunks = await findRelevantChunks(question, chunks, 3)
-    const context        = relevantChunks.join(" ... ")
+    // ── FIX: increased to 5 chunks, join cleanly, limit to 1500 chars ──
+    const relevantChunks = await findRelevantChunks(question, chunks, 5)
+    const context        = relevantChunks.join(" ").slice(0, 1500)
 
-    // @huggingface/transformers v3 QA API
-    const result = await qaPipeline(question, context)
+    // ── FIX: use flan-t5-small with structured prompt for full answers ──
+    const prompt = `Answer the question based on the context below. Give a complete and helpful answer in 2-3 sentences.
 
-    if (!result?.answer || result.answer.trim().length === 0) {
+Context: ${context}
+
+Question: ${question}
+
+Answer:`
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results: any[] = await generativePipeline(prompt, {
+      max_new_tokens: 150,
+      min_new_tokens: 10,
+    })
+
+    const answer = results?.[0]?.generated_text?.trim() || ""
+
+    if (!answer || answer.length === 0) {
       return { success: true, answer: "I could not find a specific answer on this page." }
     }
 
-    return { success: true, answer: result.answer.trim() }
+    return { success: true, answer }
 
   } catch (error) {
     console.error("yuktai: Transformers RAG error", error)
@@ -252,7 +377,7 @@ export async function askPageWithTransformers(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// isTransformersSupported — checks WebAssembly + Worker support
+// isTransformersSupported
 // ─────────────────────────────────────────────────────────────────────────────
 export function isTransformersSupported(): boolean {
   try {
