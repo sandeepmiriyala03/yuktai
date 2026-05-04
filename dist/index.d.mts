@@ -97,8 +97,9 @@ interface YuktAIWrapperProps {
     children: ReactNode;
     config?: Partial<A11yConfig>;
     showRag?: boolean;
+    showAgent?: boolean;
 }
-declare function YuktAIWrapper({ position, children, config: configOverrides, showRag, }: YuktAIWrapperProps): react_jsx_runtime.JSX.Element;
+declare function YuktAIWrapper({ position, children, config: configOverrides, showRag, showAgent, }: YuktAIWrapperProps): react_jsx_runtime.JSX.Element;
 
 declare const aiPlugin: {
     name: string;
