@@ -22,61 +22,54 @@
     "rag",
     "gemini-nano"
   ],
-
-  "main":   "./dist/index.js",
+  "main": "./dist/index.js",
   "module": "./dist/index.mjs",
-  "types":  "./dist/index.d.ts",
-
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types":   "./dist/index.d.ts",
-      "import":  "./dist/index.mjs",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
   },
-
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
-
   "scripts": {
-    "dev":            "tsup --watch",
-    "build":          "tsup",
-    "lint":           "eslint src --ext .ts,.tsx",
-    "test":           "vitest run",
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
-
-  "dependencies": {},
-
+  "dependencies": {
+    "jszip": "^3.10.1"
+  },
   "peerDependencies": {
-    "react":     ">=17.0.0",
+    "react": ">=17.0.0",
     "react-dom": ">=17.0.0"
   },
-
   "peerDependenciesMeta": {
     "@huggingface/transformers": {
       "optional": true
     }
   },
-
   "devDependencies": {
     "@huggingface/transformers": "^3.0.0",
-    "@types/react":              "^18.3.3",
-    "@types/react-dom":          "^18.3.0",
-    "eslint":                    "^8.57.0",
-    "tsup":                      "^8.0.2",
-    "typescript":                "^5.4.5",
-    "vitest":                    "^1.6.0"
+    "@types/jszip": "^3.4.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   },
-
   "engines": {
     "node": ">=18",
-    "npm":  ">=8"
+    "npm": ">=8"
   },
-
   "browserslist": [
     "Chrome >= 113",
     "Edge >= 113"
