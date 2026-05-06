@@ -28,7 +28,7 @@ import {
   isTransformersSupported,
   getModelLoadStatus,
 } from "../core/ai/transformers-rag"
-
+import CodeGenPanel from "./CodeGenPanel"
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,7 +123,8 @@ export function YuktAIWrapper({
   const a11yBottom   = 24
   const ragBottom    = showAgent ? 84  : 84
   const agentBottom  = showRag   ? 144 : 84
-
+  const codegenBottom = 204;
+const [codegenOpen, setCodegenOpen] = useState(false);
   // ─────────────────────────────────────────────────────────────────────────
   // Detect RAG engine
   // ─────────────────────────────────────────────────────────────────────────
@@ -269,6 +270,7 @@ export function YuktAIWrapper({
         if (panelOpen)  setPanelOpen(false)
         if (ragOpen)    setRagOpen(false)
         if (agentOpen)  setAgentOpen(false)
+          if (codegenOpen) setCodegenOpen(false)
       }
     }
     window.addEventListener("keydown", onKey)
@@ -321,6 +323,28 @@ export function YuktAIWrapper({
   return (
     <>
       {children}
+
+{/* ⚡ VIBE CODER BUTTON */}
+{showAgent && (
+  <button
+    style={fabBase(204, codegenOpen ? "#d97706" : "#f59e0b", codegenOpen)}
+    aria-label="Open Vibe Coder"
+    title="⚡ Vibe Coder — Generate Next.js project"
+    onClick={() => { setCodegenOpen(p => !p); setAgentOpen(false); setRagOpen(false); setPanelOpen(false) }}
+    onMouseEnter={hover}
+    onMouseLeave={unhover}
+  >
+    ⚡
+  </button>
+)}
+
+{/* ⚡ VIBE CODER PANEL */}
+{showAgent && codegenOpen && (
+  <CodeGenPanel
+    position={position}
+    onClose={() => setCodegenOpen(false)}
+  />
+)}
 
       {/* ─────────────────────────────────────────────────────────────── */}
       {/* 🤖 AGENT FLOATING BUTTON                                        */}
