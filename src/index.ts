@@ -22,12 +22,42 @@ export { default } from "./next/YuktAIWrapper";
 export { aiPlugin } from "./plugins/ai";
 export { voicePlugin } from "./plugins/voice";
 
-
 // Optional alias
 export { wcagPlugin as wcag } from "./core/renderer";
 
 // ─── Runtime ─────────────────────────────────────────────────────────────────
 export { Runtime } from "./runtime/runtime";
+
+// ─── Grid component ─────────────────────────────────────────────────────────
+export { YuktaiGrid } from "./grid/YuktaiGrid";
+export { useGrid }   from "./grid/useGrid";
+
+export type {
+  // Column definitions
+  GridColumn,
+
+  // Sort & Filter
+  SortConfig,
+  SortDirection,
+  FilterConfig,
+  FilterOperator,
+
+  // View & Theme
+  ViewMode,
+  GridTheme,
+  GridLocale,
+
+  // AI & Voice features
+  AIFeatures,
+  VoiceFeatures,
+
+  // Config
+  PaginationConfig,
+  GridTranslations,
+
+  // Main props
+  YuktaiGridProps,
+} from "./grid/types";
 
 // ─── Singleton runtime — initialised once, shared across the app ─────────────
 import { Runtime } from "./runtime/runtime";

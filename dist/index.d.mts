@@ -111,6 +111,149 @@ declare const voicePlugin: {
     execute(input: string): Promise<string>;
 };
 
+interface GridColumn<T = Record<string, unknown>> {
+    /** Unique key — must match a property in your data */
+    key: keyof T & string;
+    /** Display label for the header */
+    label: string;
+    /** Allow sorting on this column (default: true) */
+    sortable?: boolean;
+    /** Allow filtering on this column (default: true) */
+    filterable?: boolean;
+    /** Hide this column on mobile (default: false) */
+    hiddenOnMobile?: boolean;
+    /** Pin this column on tablet view */
+    pinned?: boolean;
+    /** Column width — number (px) or string (%, fr) */
+    width?: number | string;
+    /** Custom cell renderer */
+    render?: (value: T[keyof T], row: T, index: number) => ReactNode;
+    /** Cell alignment */
+    align?: "left" | "center" | "right";
+    /** Type — affects default formatting and filter UI */
+    type?: "text" | "number" | "date" | "boolean" | "badge";
+}
+type SortDirection = "asc" | "desc" | null;
+interface SortConfig {
+    key: string;
+    direction: SortDirection;
+}
+type FilterOperator = "contains" | "equals" | "startsWith" | "endsWith" | "greaterThan" | "lessThan" | "between";
+interface FilterConfig {
+    key: string;
+    operator: FilterOperator;
+    value: string | number | [number, number];
+}
+type ViewMode = "table" | "card" | "auto";
+type GridTheme = "default" | "high-contrast" | "dark" | "color-blind" | "dyslexia";
+type GridLocale = "en-IN" | "en-US" | "te-IN" | "hi-IN" | "ta-IN" | "bn-IN" | "mr-IN" | "kn-IN" | "ml-IN" | "gu-IN" | "pa-IN" | "ur-IN";
+interface AIFeatures {
+    /** Enable AI semantic search */
+    search?: boolean;
+    /** Enable AI row summary */
+    summary?: boolean;
+    /** Enable anomaly detection */
+    anomaly?: boolean;
+    /** Enable suggestions */
+    suggest?: boolean;
+}
+interface VoiceFeatures {
+    /** Voice commands for search/filter/sort */
+    control?: boolean;
+    /** Read rows aloud on focus */
+    speakOnFocus?: boolean;
+    /** Read filtered data summary aloud */
+    speakSummary?: boolean;
+    /** Voice language (defaults to locale) */
+    language?: string;
+}
+interface PaginationConfig {
+    pageSize?: number;
+    showSizeChanger?: boolean;
+    sizeOptions?: number[];
+}
+interface GridTranslations {
+    search: string;
+    noData: string;
+    loading: string;
+    rowsSelected: string;
+    page: string;
+    of: string;
+    showing: string;
+    to: string;
+    results: string;
+    sort: string;
+    filter: string;
+    export: string;
+    voice: string;
+    ask: string;
+}
+interface YuktaiGridProps<T = Record<string, unknown>> {
+    /** The data to display */
+    data: T[];
+    /** Column definitions */
+    columns: GridColumn<T>[];
+    /** View mode — "auto" picks based on screen size */
+    view?: ViewMode;
+    /** Mobile breakpoint in pixels (default: 768) */
+    mobileBreakpoint?: number;
+    /** WCAG theme (default: "default") */
+    theme?: GridTheme;
+    /** Locale (default: "en-US") */
+    locale?: GridLocale;
+    /** AI features */
+    ai?: boolean | AIFeatures;
+    /** Voice features */
+    voice?: boolean | VoiceFeatures;
+    /** Pagination */
+    pagination?: boolean | PaginationConfig;
+    /** Show search bar */
+    search?: boolean;
+    /** Multi-row selection */
+    selectable?: boolean;
+    /** Selected row keys */
+    selectedKeys?: string[];
+    /** Row key field (default: "id") */
+    rowKey?: keyof T & string;
+    /** Loading state */
+    loading?: boolean;
+    /** Custom empty state */
+    empty?: ReactNode;
+    /** Callbacks */
+    onSelectionChange?: (keys: string[]) => void;
+    onRowClick?: (row: T, index: number) => void;
+    onSortChange?: (sort: SortConfig | null) => void;
+    /** Custom className */
+    className?: string;
+}
+
+declare function YuktaiGrid<T extends Record<string, unknown>>(props: YuktaiGridProps<T>): react_jsx_runtime.JSX.Element;
+
+interface UseGridOptions<T> {
+    data: T[];
+    columns: GridColumn<T>[];
+    pagination?: boolean | PaginationConfig;
+    mobileBreakpoint?: number;
+}
+interface UseGridReturn<T> {
+    displayedData: T[];
+    totalCount: number;
+    filteredCount: number;
+    sort: SortConfig | null;
+    toggleSort: (key: string) => void;
+    clearSort: () => void;
+    searchQuery: string;
+    setSearchQuery: (q: string) => void;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    setPage: (p: number) => void;
+    setPageSize: (s: number) => void;
+    isMobile: boolean;
+    reset: () => void;
+}
+declare function useGrid<T extends Record<string, unknown>>(options: UseGridOptions<T>): UseGridReturn<T>;
+
 declare global {
     var __yuktai_runtime__: Runtime | undefined;
 }
@@ -144,4 +287,4 @@ declare const YuktAI: {
     scan(): A11yReport;
 };
 
-export { type A11yConfig, type A11yFix, type A11yReport, type ColorBlindMode, Runtime, type Severity, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, aiPlugin, YuktAIWrapper as default, voicePlugin, wcagPlugin as wcag, wcagPlugin };
+export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridColumn, type GridLocale, type GridTheme, type GridTranslations, type PaginationConfig, Runtime, type Severity, type SortConfig, type SortDirection, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, type YuktaiGridProps, aiPlugin, YuktAIWrapper as default, useGrid, voicePlugin, wcagPlugin as wcag, wcagPlugin };
