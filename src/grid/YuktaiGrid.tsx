@@ -5,6 +5,7 @@
 // Auto switches between table view (desktop) and card view (mobile)
 // WCAG 2.2 compliant by default
 // SSR-safe — works in Next.js 16 App Router
+// v4.1.0 — uses yuktai icons for sort indicators and pagination
 // ─────────────────────────────────────────────────────────────────────────────
 
 "use client"
@@ -16,8 +17,14 @@ import type {
   GridTheme,
 } from "./types"
 
+// ── yuktai icons — used inside the grid itself ──
+import { SortUpIcon }       from "../icons/SortUpIcon"
+import { SortDownIcon }     from "../icons/SortDownIcon"
+import { ChevronLeftIcon }  from "../icons/ChevronLeftIcon"
+import { ChevronRightIcon } from "../icons/ChevronRightIcon"
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Theme definition — separate styles and colors
+// Theme definition
 // ─────────────────────────────────────────────────────────────────────────────
 interface ThemeStyles {
   container: React.CSSProperties
@@ -29,9 +36,6 @@ interface ThemeStyles {
   border:    string
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Theme styles — inline so package has zero CSS dependencies
-// ─────────────────────────────────────────────────────────────────────────────
 const THEMES: Record<GridTheme, ThemeStyles> = {
   "default": {
     container: { background: "#FFFFFF", color: "#0F172A", fontFamily: "system-ui, -apple-system, sans-serif" },
@@ -81,7 +85,7 @@ const THEMES: Record<GridTheme, ThemeStyles> = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Default UI text (English defaults)
+// Default UI text
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULT_TEXT = {
   search:       "Search...",
@@ -122,10 +126,8 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
     className,
   } = props
 
-  // ── State ──
   const [selected, setSelected] = useState<string[]>(selectedKeys)
 
-  // ── Hook ──
   const {
     displayedData,
     filteredCount,
@@ -140,7 +142,6 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
     isMobile,
   } = useGrid({ data, columns, pagination, mobileBreakpoint })
 
-  // ── Decide view mode ──
   const useCardView =
     view === "card" ||
     (view === "auto" && isMobile)
@@ -148,7 +149,6 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
   const styles  = THEMES[theme]
   const visible = columns.filter(c => !(isMobile && c.hiddenOnMobile))
 
-  // ── Helpers ──
   const getRowKey = useCallback((row: T, idx: number): string => {
     if (rowKey && row[rowKey] !== undefined) return String(row[rowKey])
     if (row.id !== undefined)                return String(row.id)
@@ -170,9 +170,9 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
     })
   }, [onSelectionChange])
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   // Loading state
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div role="status" aria-live="polite" style={{
@@ -187,9 +187,9 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
     )
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   // Empty state
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   if (data.length === 0) {
     return (
       <div role="status" style={{
@@ -204,9 +204,9 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
     )
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   // Render
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   return (
     <div
       className={className}
@@ -350,12 +350,15 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
                       letterSpacing: "0.5px",
                     }}
                   >
-                    {col.label}
-                    {sort?.key === col.key && (
-                      <span aria-hidden="true" style={{ marginLeft: 6 }}>
-                        {sort.direction === "asc" ? "▲" : "▼"}
-                      </span>
-                    )}
+                    {/* Header label + yuktai sort icon */}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {col.label}
+                      {sort?.key === col.key && (
+                        sort.direction === "asc"
+                          ? <SortUpIcon   size={14} />
+                          : <SortDownIcon size={14} />
+                      )}
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -431,6 +434,8 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
             {filteredCount} {DEFAULT_TEXT.results}
           </span>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+
+            {/* Previous button — yuktai ChevronLeftIcon */}
             <button
               onClick={() => setPage(page - 1)}
               disabled={page === 1}
@@ -444,13 +449,19 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
                 opacity: page === 1 ? 0.5 : 1,
                 minHeight: 44,
                 minWidth: 44,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              ←
+              <ChevronLeftIcon size={18} />
             </button>
+
             <span style={{ padding: "0 8px" }}>
               {DEFAULT_TEXT.page} {page} {DEFAULT_TEXT.of} {totalPages}
             </span>
+
+            {/* Next button — yuktai ChevronRightIcon */}
             <button
               onClick={() => setPage(page + 1)}
               disabled={page === totalPages}
@@ -464,9 +475,12 @@ export function YuktaiGrid<T extends Record<string, unknown>>(
                 opacity: page === totalPages ? 0.5 : 1,
                 minHeight: 44,
                 minWidth: 44,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              →
+              <ChevronRightIcon size={18} />
             </button>
           </div>
         </div>
