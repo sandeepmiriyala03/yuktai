@@ -1,492 +1,555 @@
+"use client";
+
 // ─────────────────────────────────────────────────────────────────────────────
-// @yuktishaalaa/yuktai · src/grid/YuktaiGrid.tsx
+// @yuktishaalaa/yuktai · src/grid/YuktaiGridAI.tsx
 //
-// Main component — accessible AI data grid for Next.js
-// Auto switches between table view (desktop) and card view (mobile)
-// WCAG 2.2 compliant by default
-// SSR-safe — works in Next.js 16 App Router
-// v4.1.0 — uses yuktai icons for sort indicators and pagination
+// AI features for YuktaiGrid — Voice search + Chat with data
+// v4.2.0
+//
+// Features:
+// 1. 🎤 Voice input  — Web Speech API (no cost, no LLM)
+// 2. 💬 Chat panel   — ask questions about grid data
+// 3. 🔊 TTS response — reads answers aloud
+//
+// No LLM. No downloads. No API keys. 100% free forever.
 // ─────────────────────────────────────────────────────────────────────────────
 
-"use client"
+import React, { useState, useRef, useEffect, useCallback } from "react";
 
-import React, { useState, useCallback } from "react"
-import { useGrid } from "./useGrid"
-import type {
-  YuktaiGridProps,
-  GridTheme,
-} from "./types"
-
-// ── yuktai icons — used inside the grid itself ──
-import { SortUpIcon }       from "../icons/SortUpIcon"
-import { SortDownIcon }     from "../icons/SortDownIcon"
-import { ChevronLeftIcon }  from "../icons/ChevronLeftIcon"
-import { ChevronRightIcon } from "../icons/ChevronRightIcon"
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Theme definition
-// ─────────────────────────────────────────────────────────────────────────────
-interface ThemeStyles {
-  container: React.CSSProperties
-  header:    React.CSSProperties
-  row:       React.CSSProperties
-  rowHover:  React.CSSProperties
-  cell:      React.CSSProperties
-  button:    React.CSSProperties
-  border:    string
+// ── Types ─────────────────────────────────────────────────────
+interface ChatMessage {
+  role: "user" | "ai";
+  text: string;
+  time: string;
 }
 
-const THEMES: Record<GridTheme, ThemeStyles> = {
-  "default": {
-    container: { background: "#FFFFFF", color: "#0F172A", fontFamily: "system-ui, -apple-system, sans-serif" },
-    header:    { background: "#F8FAFC", color: "#475569", borderBottom: "1px solid #E2E8F0" },
-    row:       { borderBottom: "1px solid #F1F5F9" },
-    rowHover:  { background: "#F8FAFC" },
-    cell:      { color: "#0F172A" },
-    button:    { background: "#0D9488", color: "#FFFFFF" },
-    border:    "#E2E8F0",
-  },
-  "high-contrast": {
-    container: { background: "#000000", color: "#FFFFFF", fontFamily: "system-ui, sans-serif", fontWeight: 600 },
-    header:    { background: "#000000", color: "#FFFF00", borderBottom: "2px solid #FFFFFF", fontWeight: 700 },
-    row:       { borderBottom: "1px solid #FFFFFF" },
-    rowHover:  { background: "#1A1A1A" },
-    cell:      { color: "#FFFFFF" },
-    button:    { background: "#FFFF00", color: "#000000", border: "2px solid #FFFFFF" },
-    border:    "#FFFFFF",
-  },
-  "dark": {
-    container: { background: "#0F172A", color: "#F1F5F9", fontFamily: "system-ui, sans-serif" },
-    header:    { background: "#1E293B", color: "#94A3B8", borderBottom: "1px solid #334155" },
-    row:       { borderBottom: "1px solid #1E293B" },
-    rowHover:  { background: "#1E293B" },
-    cell:      { color: "#F1F5F9" },
-    button:    { background: "#14B8A6", color: "#0F172A" },
-    border:    "#334155",
-  },
-  "color-blind": {
-    container: { background: "#FFFFFF", color: "#0F172A", fontFamily: "system-ui, sans-serif" },
-    header:    { background: "#F8FAFC", color: "#475569", borderBottom: "1px solid #E2E8F0" },
-    row:       { borderBottom: "1px solid #F1F5F9" },
-    rowHover:  { background: "#F8FAFC" },
-    cell:      { color: "#0F172A" },
-    button:    { background: "#1F2937", color: "#FFFFFF" },
-    border:    "#E2E8F0",
-  },
-  "dyslexia": {
-    container: { background: "#FDF6E3", color: "#3D3424", fontFamily: "'Atkinson Hyperlegible', system-ui, sans-serif", letterSpacing: "0.3px", lineHeight: 1.7 },
-    header:    { background: "#FAF0D7", color: "#5C4F37", borderBottom: "1px solid #D7CFB8", letterSpacing: "0.5px" },
-    row:       { borderBottom: "1px solid #ECE0C2" },
-    rowHover:  { background: "#FAF0D7" },
-    cell:      { color: "#3D3424" },
-    button:    { background: "#92400E", color: "#FDF6E3" },
-    border:    "#D7CFB8",
-  },
+export interface YuktaiGridAIProps<T> {
+  data:       T[];
+  columns:    { key: string; label: string; type?: "number" | "text" | "date" }[];
+  onSearch:   (query: string) => void;   // fires when voice search detected
+  onSort?:    (key: string, dir: "asc" | "desc") => void;
+  theme?:     "light" | "dark";
+  language?:  "en-US" | "en-IN" | "hi-IN" | "te-IN";
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Default UI text
-// ─────────────────────────────────────────────────────────────────────────────
-const DEFAULT_TEXT = {
-  search:       "Search...",
-  noData:       "No data to display",
-  loading:      "Loading...",
-  rowsSelected: "rows selected",
-  page:         "Page",
-  of:           "of",
-  showing:      "Showing",
-  to:           "to",
-  results:      "results",
-  prev:         "Previous",
-  next:         "Next",
+// ─────────────────────────────────────────────────────────────
+// Simple NLP parser — understands intent from natural language
+// No AI model needed — just clever pattern matching
+// ─────────────────────────────────────────────────────────────
+function parseIntent(text: string): { type: string; payload?: any } {
+  const t = text.toLowerCase().trim();
+
+  // Command intents
+  if (/^(search|find|show|filter)/.test(t)) {
+    const term = t.replace(/^(search|find|show|filter)\s+(for\s+|by\s+)?/, "").trim();
+    return { type: "search", payload: term };
+  }
+
+  if (/sort/.test(t)) {
+    const dir = /desc|high|large|top/.test(t) ? "desc" : "asc";
+    const key = t.match(/(name|age|salary|role|email|date)/)?.[1];
+    return { type: "sort", payload: { key, dir } };
+  }
+
+  // Question intents (chat)
+  if (/^(who|what|which|how many|highest|lowest|max|min|average|avg|total|sum)/.test(t)) {
+    return { type: "question", payload: text };
+  }
+
+  // Everything else = plain search
+  return { type: "search", payload: text };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Data analyzer — answers questions using row data
+// No LLM — just Math + string matching
+// ─────────────────────────────────────────────────────────────
+function answerQuestion<T extends Record<string, unknown>>(
+  question: string,
+  data: T[],
+  columns: YuktaiGridAIProps<T>["columns"]
+): string {
+  if (data.length === 0) return "There is no data to analyze.";
+
+  const q = question.toLowerCase();
+
+  // Count questions
+  if (/how many|count|total/.test(q)) {
+    return `There are ${data.length} rows in the grid.`;
+  }
+
+  // Find numeric column referenced
+  const numericCols = columns.filter(c => c.type === "number");
+  const referencedCol = columns.find(c => q.includes(c.label.toLowerCase()) || q.includes(c.key.toLowerCase()));
+
+  // Highest / max
+  if (/highest|maximum|max|top|largest/.test(q)) {
+    const col = referencedCol ?? numericCols[0];
+    if (!col) return "I could not find a column to analyze.";
+    const values = data
+      .map(r => ({ row: r, val: Number(r[col.key]) }))
+      .filter(x => !isNaN(x.val))
+      .sort((a, b) => b.val - a.val);
+    if (values.length === 0) return `No numeric data in ${col.label}.`;
+    const top = values[0];
+    const nameCol = columns.find(c => c.key === "name" || c.label.toLowerCase() === "name");
+    const name = nameCol ? String(top.row[nameCol.key]) : `Row ${data.indexOf(top.row) + 1}`;
+    return `The highest ${col.label} is ${top.val.toLocaleString("en-IN")}, held by ${name}.`;
+  }
+
+  // Lowest / min
+  if (/lowest|minimum|min|smallest|bottom/.test(q)) {
+    const col = referencedCol ?? numericCols[0];
+    if (!col) return "I could not find a column to analyze.";
+    const values = data
+      .map(r => ({ row: r, val: Number(r[col.key]) }))
+      .filter(x => !isNaN(x.val))
+      .sort((a, b) => a.val - b.val);
+    if (values.length === 0) return `No numeric data in ${col.label}.`;
+    const bottom = values[0];
+    const nameCol = columns.find(c => c.key === "name" || c.label.toLowerCase() === "name");
+    const name = nameCol ? String(bottom.row[nameCol.key]) : `Row ${data.indexOf(bottom.row) + 1}`;
+    return `The lowest ${col.label} is ${bottom.val.toLocaleString("en-IN")}, held by ${name}.`;
+  }
+
+  // Average
+  if (/average|avg|mean/.test(q)) {
+    const col = referencedCol ?? numericCols[0];
+    if (!col) return "I could not find a column to analyze.";
+    const values = data.map(r => Number(r[col.key])).filter(v => !isNaN(v));
+    if (values.length === 0) return `No numeric data in ${col.label}.`;
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    return `The average ${col.label} is ${Math.round(avg).toLocaleString("en-IN")}.`;
+  }
+
+  // Sum / total
+  if (/sum|total/.test(q)) {
+    const col = referencedCol ?? numericCols[0];
+    if (!col) return "I could not find a column to analyze.";
+    const values = data.map(r => Number(r[col.key])).filter(v => !isNaN(v));
+    if (values.length === 0) return `No numeric data in ${col.label}.`;
+    const sum = values.reduce((a, b) => a + b, 0);
+    return `The total ${col.label} is ${sum.toLocaleString("en-IN")}.`;
+  }
+
+  // Who / where / which — name lookup
+  if (/who|where|which|whose/.test(q)) {
+    const nameMatch = q.match(/\b([a-z]{3,})\b/g)?.filter(w =>
+      !["who", "where", "which", "whose", "is", "the", "has", "have"].includes(w)
+    );
+    if (!nameMatch) return "I need a name to look up.";
+    const searchTerm = nameMatch.join(" ");
+    const found = data.find(r =>
+      Object.values(r).some(v => String(v).toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+    if (!found) return `I could not find anyone matching "${searchTerm}".`;
+    const summary = columns
+      .map(c => `${c.label}: ${found[c.key]}`)
+      .join(", ");
+    return summary;
+  }
+
+  return "I understand you have a question. Try asking 'highest salary' or 'how many rows'.";
+}
+
+// ─────────────────────────────────────────────────────────────
+// Speech Recognition hook — Web Speech API wrapper
+// ─────────────────────────────────────────────────────────────
+function useSpeechRecognition(language: string = "en-US") {
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [supported, setSupported] = useState(true);
+  const recogRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setSupported(false);
+      return;
+    }
+    const recog = new SR();
+    recog.continuous = false;
+    recog.interimResults = false;
+    recog.lang = language;
+    recog.onresult = (event: any) => {
+      const text = event.results[0][0].transcript;
+      setTranscript(text);
+      setListening(false);
+    };
+    recog.onerror = () => setListening(false);
+    recog.onend = () => setListening(false);
+    recogRef.current = recog;
+  }, [language]);
+
+  const start = useCallback(() => {
+    if (!recogRef.current) return;
+    setTranscript("");
+    setListening(true);
+    try {
+      recogRef.current.start();
+    } catch {
+      setListening(false);
+    }
+  }, []);
+
+  const stop = useCallback(() => {
+    recogRef.current?.stop();
+    setListening(false);
+  }, []);
+
+  return { listening, transcript, supported, start, stop };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Text-to-Speech helper
+// ─────────────────────────────────────────────────────────────
+function speak(text: string, lang: string = "en-US") {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang;
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main component
-// ─────────────────────────────────────────────────────────────────────────────
-export function YuktaiGrid<T extends Record<string, unknown>>(
-  props: YuktaiGridProps<T>
-) {
-  const {
-    data,
-    columns,
-    view             = "auto",
-    mobileBreakpoint = 768,
-    theme            = "default",
-    pagination       = true,
-    search           = true,
-    selectable       = false,
-    selectedKeys     = [],
-    rowKey,
-    loading          = false,
-    empty,
-    onSelectionChange,
-    onRowClick,
-    onSortChange,
-    className,
-  } = props
+// ─────────────────────────────────────────────────────────────
+export function YuktaiGrid<T extends Record<string, unknown>>({
+  data,
+  columns,
+  onSearch,
+  onSort,
+  theme    = "light",
+  language = "en-US",
+}: YuktaiGridAIProps<T>) {
 
-  const [selected, setSelected] = useState<string[]>(selectedKeys)
+  const [chatOpen, setChatOpen]     = useState(false);
+  const [input, setInput]           = useState("");
+  const [messages, setMessages]     = useState<ChatMessage[]>([
+    {
+      role: "ai",
+      text: "Hi! Ask me anything about your data — like 'highest salary' or 'how many rows'. You can also say 'search Sandeep' or 'sort age descending'.",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    },
+  ]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const {
-    displayedData,
-    filteredCount,
-    sort,
-    toggleSort,
-    searchQuery,
-    setSearchQuery,
-    page,
-    pageSize,
-    totalPages,
-    setPage,
-    isMobile,
-  } = useGrid({ data, columns, pagination, mobileBreakpoint })
+  const { listening, transcript, supported, start, stop } = useSpeechRecognition(language);
 
-  const useCardView =
-    view === "card" ||
-    (view === "auto" && isMobile)
+  const dark = theme === "dark";
+  const colors = {
+    bg:       dark ? "#0F172A" : "#FFFFFF",
+    surface:  dark ? "#1E293B" : "#F8FAFC",
+    border:   dark ? "#334155" : "#E2E8F0",
+    text:     dark ? "#F1F5F9" : "#0F172A",
+    muted:    dark ? "#94A3B8" : "#64748B",
+    accent:   "#10B981",
+    userMsg:  dark ? "#334155" : "#DBEAFE",
+    aiMsg:    dark ? "#1E293B" : "#F0FDF4",
+  };
 
-  const styles  = THEMES[theme]
-  const visible = columns.filter(c => !(isMobile && c.hiddenOnMobile))
+  // ── Auto-scroll chat ──
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const getRowKey = useCallback((row: T, idx: number): string => {
-    if (rowKey && row[rowKey] !== undefined) return String(row[rowKey])
-    if (row.id !== undefined)                return String(row.id)
-    return String(idx)
-  }, [rowKey])
+  // ── Handle voice transcript ──
+  useEffect(() => {
+    if (!transcript) return;
+    handleUserInput(transcript);
+  }, [transcript]);
 
-  const handleSort = useCallback((key: string) => {
-    toggleSort(key)
-    onSortChange?.(sort)
-  }, [toggleSort, onSortChange, sort])
+  // ── Process user input (typed or spoken) ──
+  const handleUserInput = (text: string) => {
+    if (!text.trim()) return;
 
-  const handleSelect = useCallback((key: string) => {
-    setSelected(prev => {
-      const next = prev.includes(key)
-        ? prev.filter(k => k !== key)
-        : [...prev, key]
-      onSelectionChange?.(next)
-      return next
-    })
-  }, [onSelectionChange])
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setMessages(prev => [...prev, { role: "user", text, time }]);
+    setInput("");
 
-  // ─────────────────────────────────────────────────────────────────
-  // Loading state
-  // ─────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div role="status" aria-live="polite" style={{
-        ...styles.container,
-        padding: "2rem",
-        textAlign: "center",
-        borderRadius: 8,
-        border: `1px solid ${styles.border}`,
-      }}>
-        {DEFAULT_TEXT.loading}
-      </div>
-    )
-  }
+    const intent = parseIntent(text);
 
-  // ─────────────────────────────────────────────────────────────────
-  // Empty state
-  // ─────────────────────────────────────────────────────────────────
-  if (data.length === 0) {
-    return (
-      <div role="status" style={{
-        ...styles.container,
-        padding: "2rem",
-        textAlign: "center",
-        borderRadius: 8,
-        border: `1px solid ${styles.border}`,
-      }}>
-        {empty ?? DEFAULT_TEXT.noData}
-      </div>
-    )
-  }
+    // Execute action based on intent
+    let aiResponse = "";
 
-  // ─────────────────────────────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────────────────────────────
+    if (intent.type === "search") {
+      onSearch(intent.payload);
+      aiResponse = `Searching for "${intent.payload}"...`;
+    } else if (intent.type === "sort" && onSort) {
+      const { key, dir } = intent.payload;
+      if (key) {
+        onSort(key, dir);
+        aiResponse = `Sorted by ${key} (${dir === "asc" ? "ascending" : "descending"}).`;
+      } else {
+        aiResponse = "Which column should I sort? Try 'sort by salary'.";
+      }
+    } else if (intent.type === "question") {
+      aiResponse = answerQuestion(intent.payload, data, columns);
+    }
+
+    // Add AI response
+    setTimeout(() => {
+      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setMessages(prev => [...prev, { role: "ai", text: aiResponse, time }]);
+      speak(aiResponse, language);
+    }, 400);
+  };
+
+  const handleSubmit = () => handleUserInput(input);
+
+  const suggestions = [
+    "highest salary",
+    "how many rows",
+    "average age",
+    "search sandeep",
+  ];
+
   return (
-    <div
-      className={className}
-      style={{
-        ...styles.container,
-        borderRadius: 8,
-        border: `1px solid ${styles.border}`,
-        overflow: "hidden",
-      }}
-      data-yuktai-grid
-      data-theme={theme}
-    >
+    <>
+      {/* ── Floating AI button ── */}
+      <button
+        onClick={() => setChatOpen(!chatOpen)}
+        aria-label={chatOpen ? "Close AI assistant" : "Open AI assistant"}
+        style={{
+          position:     "fixed",
+          bottom:       24,
+          right:        24,
+          zIndex:       9998,
+          width:        56,
+          height:       56,
+          borderRadius: 28,
+          background:   colors.accent,
+          color:        "#FFFFFF",
+          border:       "none",
+          cursor:       "pointer",
+          boxShadow:    "0 8px 20px rgba(16,185,129,0.3)",
+          display:      "flex",
+          alignItems:   "center",
+          justifyContent:"center",
+          fontSize:     20,
+          transition:   "transform 0.2s",
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
+        onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+      >
+        {chatOpen ? "✕" : "🤖"}
+      </button>
 
-      {/* ── Header with search ── */}
-      {search && (
-        <div style={{
-          ...styles.header,
-          padding: "12px 16px",
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-        }}>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder={DEFAULT_TEXT.search}
-            aria-label={DEFAULT_TEXT.search}
-            style={{
-              flex: 1,
-              padding: "8px 12px",
-              fontSize: 14,
-              border: `1px solid ${styles.border}`,
-              borderRadius: 6,
-              background: "transparent",
-              color: "inherit",
-              minHeight: 44,
-            }}
-          />
-          {selectable && selected.length > 0 && (
-            <span style={{ fontSize: 13, color: "inherit" }}>
-              {selected.length} {DEFAULT_TEXT.rowsSelected}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── Card view (mobile) ── */}
-      {useCardView ? (
-        <div role="list" style={{ padding: 8 }}>
-          {displayedData.map((row, idx) => {
-            const key = getRowKey(row, idx)
-            return (
-              <div
-                key={key}
-                role="listitem"
-                onClick={() => onRowClick?.(row, idx)}
-                style={{
-                  padding: 12,
-                  marginBottom: 8,
-                  border: `1px solid ${styles.border}`,
-                  borderRadius: 8,
-                  background: "transparent",
-                  cursor: onRowClick ? "pointer" : "default",
-                  minHeight: 44,
-                }}
-                tabIndex={0}
-              >
-                {visible.map(col => (
-                  <div key={col.key} style={{
-                    display:  "flex",
-                    justifyContent: "space-between",
-                    padding:  "4px 0",
-                    fontSize: 13,
-                  }}>
-                    <span style={{ fontWeight: 500, opacity: 0.7 }}>
-                      {col.label}:
-                    </span>
-                    <span style={styles.cell}>
-                      {col.render
-                        ? col.render(row[col.key], row, idx)
-                        : String(row[col.key] ?? "")}
-                    </span>
-                  </div>
-                ))}
+      {/* ── Chat panel ── */}
+      {chatOpen && (
+        <div
+          role="dialog"
+          aria-label="AI Grid Assistant"
+          style={{
+            position:      "fixed",
+            bottom:        90,
+            right:         24,
+            width:         360,
+            maxWidth:      "calc(100vw - 48px)",
+            height:        480,
+            maxHeight:     "70vh",
+            background:    colors.bg,
+            border:        `1px solid ${colors.border}`,
+            borderRadius:  16,
+            boxShadow:     "0 20px 40px rgba(0,0,0,0.15)",
+            zIndex:        9997,
+            display:       "flex",
+            flexDirection: "column",
+            overflow:      "hidden",
+            fontFamily:    "system-ui, sans-serif",
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            padding:      "14px 16px",
+            background:   colors.accent,
+            color:        "#FFFFFF",
+            display:      "flex",
+            alignItems:   "center",
+            gap:          10,
+          }}>
+            <span style={{ fontSize: 22 }}>🤖</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Grid AI Assistant</div>
+              <div style={{ fontSize: 11, opacity: 0.9 }}>
+                {supported ? "Voice + Chat · Offline · Free" : "Chat only (voice not supported)"}
               </div>
-            )
-          })}
-        </div>
-      ) : (
-
-        /* ── Table view (desktop) ── */
-        <div style={{ overflowX: "auto" }}>
-          <table
-            role="grid"
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: 14,
-            }}
-          >
-            <thead>
-              <tr role="row">
-                {selectable && (
-                  <th style={{ ...styles.header, padding: "10px 14px", width: 44 }}>
-                    <input
-                      type="checkbox"
-                      aria-label="Select all"
-                      checked={selected.length === displayedData.length && displayedData.length > 0}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setSelected(displayedData.map((r, i) => getRowKey(r, i)))
-                        } else {
-                          setSelected([])
-                        }
-                      }}
-                      style={{ minWidth: 20, minHeight: 20, cursor: "pointer" }}
-                    />
-                  </th>
-                )}
-                {visible.map(col => (
-                  <th
-                    key={col.key}
-                    role="columnheader"
-                    aria-sort={
-                      sort?.key === col.key
-                        ? sort.direction === "asc" ? "ascending" : "descending"
-                        : "none"
-                    }
-                    onClick={() => col.sortable !== false && handleSort(col.key)}
-                    style={{
-                      ...styles.header,
-                      padding: "10px 14px",
-                      textAlign: col.align ?? "left",
-                      cursor: col.sortable !== false ? "pointer" : "default",
-                      userSelect: "none",
-                      width: col.width,
-                      fontWeight: 500,
-                      fontSize: 12,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    {/* Header label + yuktai sort icon */}
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      {col.label}
-                      {sort?.key === col.key && (
-                        sort.direction === "asc"
-                          ? <SortUpIcon   size={14} />
-                          : <SortDownIcon size={14} />
-                      )}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {displayedData.map((row, idx) => {
-                const key = getRowKey(row, idx)
-                const isSelected = selected.includes(key)
-                return (
-                  <tr
-                    key={key}
-                    role="row"
-                    aria-selected={isSelected}
-                    onClick={() => onRowClick?.(row, idx)}
-                    style={{
-                      ...styles.row,
-                      cursor: onRowClick ? "pointer" : "default",
-                      background: isSelected ? (styles.rowHover.background as string) : "transparent",
-                    }}
-                  >
-                    {selectable && (
-                      <td style={{ padding: "10px 14px" }}>
-                        <input
-                          type="checkbox"
-                          aria-label={`Select row ${idx + 1}`}
-                          checked={isSelected}
-                          onChange={() => handleSelect(key)}
-                          onClick={e => e.stopPropagation()}
-                          style={{ minWidth: 20, minHeight: 20, cursor: "pointer" }}
-                        />
-                      </td>
-                    )}
-                    {visible.map(col => (
-                      <td
-                        key={col.key}
-                        role="gridcell"
-                        style={{
-                          ...styles.cell,
-                          padding: "10px 14px",
-                          textAlign: col.align ?? "left",
-                        }}
-                      >
-                        {col.render
-                          ? col.render(row[col.key], row, idx)
-                          : String(row[col.key] ?? "")}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ── Pagination ── */}
-      {pagination !== false && totalPages > 1 && (
-        <div style={{
-          ...styles.header,
-          padding: "10px 14px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          borderTop: `1px solid ${styles.border}`,
-          borderBottom: "none",
-          fontSize: 13,
-          flexWrap: "wrap",
-          gap: 8,
-        }}>
-          <span>
-            {DEFAULT_TEXT.showing} {((page - 1) * pageSize) + 1} {DEFAULT_TEXT.to}{" "}
-            {Math.min(page * pageSize, filteredCount)} {DEFAULT_TEXT.of}{" "}
-            {filteredCount} {DEFAULT_TEXT.results}
-          </span>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-
-            {/* Previous button — yuktai ChevronLeftIcon */}
+            </div>
             <button
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1}
-              aria-label={DEFAULT_TEXT.prev}
+              onClick={() => setChatOpen(false)}
+              aria-label="Close"
               style={{
-                ...styles.button,
-                padding: "6px 12px",
-                border: `1px solid ${styles.border}`,
-                borderRadius: 4,
-                cursor: page === 1 ? "not-allowed" : "pointer",
-                opacity: page === 1 ? 0.5 : 1,
-                minHeight: 44,
-                minWidth: 44,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
+                background: "transparent",
+                border:     "none",
+                color:      "#FFFFFF",
+                cursor:     "pointer",
+                fontSize:   20,
+                padding:    4,
               }}
             >
-              <ChevronLeftIcon size={18} />
+              ✕
             </button>
+          </div>
 
-            <span style={{ padding: "0 8px" }}>
-              {DEFAULT_TEXT.page} {page} {DEFAULT_TEXT.of} {totalPages}
-            </span>
+          {/* Messages */}
+          <div style={{
+            flex:       1,
+            overflowY:  "auto",
+            padding:    12,
+            display:    "flex",
+            flexDirection: "column",
+            gap:        8,
+          }}>
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                style={{
+                  alignSelf:      msg.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth:       "85%",
+                  padding:        "8px 12px",
+                  borderRadius:   12,
+                  background:     msg.role === "user" ? colors.userMsg : colors.aiMsg,
+                  color:          colors.text,
+                  fontSize:       13.5,
+                  lineHeight:     1.5,
+                }}
+              >
+                <div>{msg.text}</div>
+                <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: "right" }}>
+                  {msg.time}
+                </div>
+              </div>
+            ))}
+            {listening && (
+              <div style={{
+                alignSelf:    "flex-end",
+                padding:      "8px 12px",
+                borderRadius: 12,
+                background:   "#FEE2E2",
+                color:        "#991B1B",
+                fontSize:     13.5,
+                fontStyle:    "italic",
+              }}>
+                🎤 Listening...
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
 
-            {/* Next button — yuktai ChevronRightIcon */}
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={page === totalPages}
-              aria-label={DEFAULT_TEXT.next}
+          {/* Suggestion chips */}
+          <div style={{
+            padding:    "6px 12px",
+            borderTop:  `1px solid ${colors.border}`,
+            display:    "flex",
+            gap:        6,
+            overflowX:  "auto",
+            flexShrink: 0,
+          }}>
+            {suggestions.map(s => (
+              <button
+                key={s}
+                onClick={() => handleUserInput(s)}
+                style={{
+                  padding:      "4px 10px",
+                  borderRadius: 12,
+                  background:   colors.surface,
+                  border:       `1px solid ${colors.border}`,
+                  color:        colors.text,
+                  fontSize:     11.5,
+                  cursor:       "pointer",
+                  whiteSpace:   "nowrap",
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {/* Input area */}
+          <div style={{
+            padding:    10,
+            display:    "flex",
+            gap:        6,
+            borderTop:  `1px solid ${colors.border}`,
+            background: colors.surface,
+          }}>
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              placeholder="Ask or say a command..."
+              aria-label="Chat input"
               style={{
-                ...styles.button,
-                padding: "6px 12px",
-                border: `1px solid ${styles.border}`,
-                borderRadius: 4,
-                cursor: page === totalPages ? "not-allowed" : "pointer",
-                opacity: page === totalPages ? 0.5 : 1,
-                minHeight: 44,
-                minWidth: 44,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
+                flex:         1,
+                padding:      "8px 12px",
+                border:       `1px solid ${colors.border}`,
+                borderRadius: 8,
+                background:   colors.bg,
+                color:        colors.text,
+                fontSize:     13,
+                outline:      "none",
+              }}
+            />
+
+            {/* Mic button */}
+            {supported && (
+              <button
+                onClick={listening ? stop : start}
+                aria-label={listening ? "Stop listening" : "Start voice input"}
+                style={{
+                  width:        36,
+                  height:       36,
+                  borderRadius: 8,
+                  background:   listening ? "#EF4444" : colors.accent,
+                  color:        "#FFFFFF",
+                  border:       "none",
+                  cursor:       "pointer",
+                  display:      "flex",
+                  alignItems:   "center",
+                  justifyContent:"center",
+                  fontSize:     16,
+                  flexShrink:   0,
+                  animation:    listening ? "yuktai-pulse 1s ease-in-out infinite" : "none",
+                }}
+              >
+                🎤
+              </button>
+            )}
+
+            <button
+              onClick={handleSubmit}
+              aria-label="Send"
+              disabled={!input.trim()}
+              style={{
+                padding:      "0 14px",
+                background:   input.trim() ? colors.accent : colors.muted,
+                color:        "#FFFFFF",
+                border:       "none",
+                borderRadius: 8,
+                cursor:       input.trim() ? "pointer" : "not-allowed",
+                fontSize:     13,
+                fontWeight:   600,
+                flexShrink:   0,
               }}
             >
-              <ChevronRightIcon size={18} />
+              Send
             </button>
           </div>
         </div>
       )}
-    </div>
-  )
+
+      <style>{`
+        @keyframes yuktai-pulse {
+          0%, 100% { transform: scale(1);   box-shadow: 0 0 0 0    rgba(239, 68, 68, 0.4); }
+          50%      { transform: scale(1.1); box-shadow: 0 0 0 8px  rgba(239, 68, 68, 0);   }
+        }
+      `}</style>
+    </>
+  );
 }
 
-export default YuktaiGrid
+export default YuktaiGrid;

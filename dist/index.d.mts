@@ -111,6 +111,20 @@ declare const voicePlugin: {
     execute(input: string): Promise<string>;
 };
 
+interface YuktaiGridAIProps<T> {
+    data: T[];
+    columns: {
+        key: string;
+        label: string;
+        type?: "number" | "text" | "date";
+    }[];
+    onSearch: (query: string) => void;
+    onSort?: (key: string, dir: "asc" | "desc") => void;
+    theme?: "light" | "dark";
+    language?: "en-US" | "en-IN" | "hi-IN" | "te-IN";
+}
+declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
+
 interface GridColumn<T = Record<string, unknown>> {
     /** Unique key — must match a property in your data */
     key: keyof T & string;
@@ -226,8 +240,6 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
     /** Custom className */
     className?: string;
 }
-
-declare function YuktaiGrid<T extends Record<string, unknown>>(props: YuktaiGridProps<T>): react_jsx_runtime.JSX.Element;
 
 interface UseGridOptions<T> {
     data: T[];
