@@ -111,7 +111,7 @@ declare const voicePlugin: {
     execute(input: string): Promise<string>;
 };
 
-interface YuktaiGridAIProps<T> {
+interface YuktaiGridAIProps$1<T> {
     data: T[];
     columns: {
         key: string;
@@ -123,7 +123,7 @@ interface YuktaiGridAIProps<T> {
     theme?: "light" | "dark";
     language?: "en-US" | "en-IN" | "hi-IN" | "te-IN";
 }
-declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
+declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, }: YuktaiGridAIProps$1<T>): react_jsx_runtime.JSX.Element;
 
 interface GridColumn<T = Record<string, unknown>> {
     /** Unique key — must match a property in your data */
@@ -266,6 +266,19 @@ interface UseGridReturn<T> {
 }
 declare function useGrid<T extends Record<string, unknown>>(options: UseGridOptions<T>): UseGridReturn<T>;
 
+interface YuktaiGridAIProps<T> {
+    data: T[];
+    columns: {
+        key: string;
+        label: string;
+        type?: "number" | "text" | "date";
+    }[];
+    onSearch: (query: string) => void;
+    onSort?: (key: string, dir: "asc" | "desc") => void;
+    theme?: "light" | "dark";
+    language?: "en-US" | "en-IN" | "hi-IN" | "te-IN";
+}
+
 interface IconProps extends React.SVGAttributes<SVGSVGElement> {
     /** Size in pixels — applied to both width and height. Default: 20 */
     size?: number | string;
@@ -331,4 +344,4 @@ declare const YuktAI: {
     scan(): A11yReport;
 };
 
-export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridColumn, type GridLocale, type GridTheme, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, type YuktaiGridProps, aiPlugin, YuktAIWrapper as default, useGrid, voicePlugin, wcagPlugin as wcag, wcagPlugin };
+export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridColumn, type GridLocale, type GridTheme, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, type YuktaiGridAIProps, type YuktaiGridProps, aiPlugin, YuktAIWrapper as default, useGrid, voicePlugin, wcagPlugin as wcag, wcagPlugin };

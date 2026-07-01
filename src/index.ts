@@ -31,7 +31,7 @@ export { Runtime } from "./runtime/runtime";
 // ─── Grid component ─────────────────────────────────────────────────────────
 export { YuktaiGrid } from "./grid/YuktaiGrid";
 export { useGrid }   from "./grid/useGrid";
-
+export type { YuktaiGridAIProps } from "./grid/YuktaiGridAI";
 export type {
   GridColumn,
   SortConfig,
