@@ -33,31 +33,34 @@ export { YuktaiGrid } from "./grid/YuktaiGrid";
 export { useGrid }   from "./grid/useGrid";
 
 export type {
-  // Column definitions
   GridColumn,
-
-  // Sort & Filter
   SortConfig,
   SortDirection,
   FilterConfig,
   FilterOperator,
-
-  // View & Theme
   ViewMode,
   GridTheme,
   GridLocale,
-
-  // AI & Voice features
   AIFeatures,
   VoiceFeatures,
-
-  // Config
   PaginationConfig,
   GridTranslations,
-
-  // Main props
   YuktaiGridProps,
 } from "./grid/types";
+
+// ─── Icons ─────────────────────────────────────────────────────────────────
+export {
+  IconBase,
+  SearchIcon,
+  SortUpIcon,
+  SortDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CheckIcon,
+  CloseIcon,
+} from "./icons";
+
+export type { IconProps } from "./icons";
 
 // ─── Singleton runtime — initialised once, shared across the app ─────────────
 import { Runtime } from "./runtime/runtime";

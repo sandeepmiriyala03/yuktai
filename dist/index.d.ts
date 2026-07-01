@@ -1,5 +1,5 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
-import { ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 
 interface Plugin {
     name: string;
@@ -254,6 +254,38 @@ interface UseGridReturn<T> {
 }
 declare function useGrid<T extends Record<string, unknown>>(options: UseGridOptions<T>): UseGridReturn<T>;
 
+interface IconProps extends React.SVGAttributes<SVGSVGElement> {
+    /** Size in pixels — applied to both width and height. Default: 20 */
+    size?: number | string;
+    /** Stroke color — defaults to currentColor (inherits from parent) */
+    color?: string;
+    /** Stroke width override — default: 2.5 */
+    strokeWidth?: number;
+    /** Accessible label — if provided, icon becomes non-decorative */
+    label?: string;
+}
+/**
+ * Shared base for all yuktai icons.
+ * Children should be SVG path/circle/rect elements.
+ */
+declare function IconBase({ size, color, strokeWidth, label, children, ...rest }: IconProps & {
+    children: React.ReactNode;
+}): react_jsx_runtime.JSX.Element;
+
+declare function SearchIcon(props: IconProps): react_jsx_runtime.JSX.Element;
+
+declare function SortUpIcon(props: IconProps): react_jsx_runtime.JSX.Element;
+
+declare function SortDownIcon(props: IconProps): react_jsx_runtime.JSX.Element;
+
+declare function ChevronLeftIcon(props: IconProps): react_jsx_runtime.JSX.Element;
+
+declare function ChevronRightIcon(props: IconProps): react_jsx_runtime.JSX.Element;
+
+declare function CheckIcon(props: IconProps): react_jsx_runtime.JSX.Element;
+
+declare function CloseIcon(props: IconProps): react_jsx_runtime.JSX.Element;
+
 declare global {
     var __yuktai_runtime__: Runtime | undefined;
 }
@@ -287,4 +319,4 @@ declare const YuktAI: {
     scan(): A11yReport;
 };
 
-export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridColumn, type GridLocale, type GridTheme, type GridTranslations, type PaginationConfig, Runtime, type Severity, type SortConfig, type SortDirection, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, type YuktaiGridProps, aiPlugin, YuktAIWrapper as default, useGrid, voicePlugin, wcagPlugin as wcag, wcagPlugin };
+export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridColumn, type GridLocale, type GridTheme, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, type YuktaiGridProps, aiPlugin, YuktAIWrapper as default, useGrid, voicePlugin, wcagPlugin as wcag, wcagPlugin };
