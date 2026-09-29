@@ -33,9 +33,15 @@ declare global {
   }
 }
 
+type WebMCPColumn = {
+  key: string;
+  label: string;
+  type?: "text" | "number" | "date";
+};
+
 export type YuktaiGridWebMCPProps<T> = {
   data: T[];
-  columns: GridColumn[];
+  columns: WebMCPColumn[];
   name?: string;
   onSelectRow?: (id: string) => void;
   onHighlightRows?: (ids: string[]) => void;
@@ -63,7 +69,7 @@ export default function YuktaiGridWebMCP<
 
     const context: GridToolContext<T> = {
       data,
-      columns,
+      columns: columns as GridColumn[],
       onSelectRow,
       onHighlightRows,
       onOpenRow,

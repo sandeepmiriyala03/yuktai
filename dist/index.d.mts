@@ -280,6 +280,52 @@ interface YuktaiGridAIProps<T> {
 }
 declare function YuktaiGridAI<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
 
+declare global {
+    interface Document {
+        modelContext?: {
+            registerTool: (tool: {
+                name: string;
+                title: string;
+                description: string;
+                inputSchema: Record<string, unknown>;
+                execute: (input: any) => Promise<unknown> | unknown;
+            }, options?: {
+                signal?: AbortSignal;
+            }) => Promise<void>;
+        };
+    }
+}
+type WebMCPColumn = {
+    key: string;
+    label: string;
+    type?: "text" | "number" | "date";
+};
+type YuktaiGridWebMCPProps<T> = {
+    data: T[];
+    columns: WebMCPColumn[];
+    name?: string;
+    onSelectRow?: (id: string) => void;
+    onHighlightRows?: (ids: string[]) => void;
+    onOpenRow?: (id: string) => void;
+};
+declare function YuktaiGridWebMCP<T extends Record<string, unknown>>({ data, columns, name, onSelectRow, onHighlightRows, onOpenRow, }: YuktaiGridWebMCPProps<T>): null;
+
+type GridAgentTool = {
+    name: string;
+    description: string;
+    execute: (input: Record<string, unknown>) => Promise<unknown> | unknown;
+};
+type YuktaiGridAgentProps = {
+    tools: GridAgentTool[];
+    onResult?: (result: unknown) => void;
+    onError?: (error: Error) => void;
+};
+declare function useYuktaiGridAgent({ tools, onResult, onError, }: YuktaiGridAgentProps): {
+    loading: boolean;
+    tools: GridAgentTool[];
+    executeTool: (name: string, input?: Record<string, unknown>) => Promise<unknown>;
+};
+
 type GridColumn = {
     key: string;
     label: string;
@@ -304,47 +350,6 @@ declare function getRow<T extends Record<string, unknown>>(context: GridToolCont
 declare function highlightRows<T extends Record<string, unknown>>(context: GridToolContext<T>, ids: string[]): GridToolResult<string[]>;
 declare function selectRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<string>;
 declare function openRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<string>;
-
-declare global {
-    interface Document {
-        modelContext?: {
-            registerTool: (tool: {
-                name: string;
-                title: string;
-                description: string;
-                inputSchema: Record<string, unknown>;
-                execute: (input: any) => Promise<unknown> | unknown;
-            }, options?: {
-                signal?: AbortSignal;
-            }) => Promise<void>;
-        };
-    }
-}
-type YuktaiGridWebMCPProps<T> = {
-    data: T[];
-    columns: GridColumn[];
-    name?: string;
-    onSelectRow?: (id: string) => void;
-    onHighlightRows?: (ids: string[]) => void;
-    onOpenRow?: (id: string) => void;
-};
-declare function YuktaiGridWebMCP<T extends Record<string, unknown>>({ data, columns, name, onSelectRow, onHighlightRows, onOpenRow, }: YuktaiGridWebMCPProps<T>): null;
-
-type GridAgentTool = {
-    name: string;
-    description: string;
-    execute: (input: Record<string, unknown>) => Promise<unknown> | unknown;
-};
-type YuktaiGridAgentProps = {
-    tools: GridAgentTool[];
-    onResult?: (result: unknown) => void;
-    onError?: (error: Error) => void;
-};
-declare function useYuktaiGridAgent({ tools, onResult, onError, }: YuktaiGridAgentProps): {
-    loading: boolean;
-    tools: GridAgentTool[];
-    executeTool: (name: string, input?: Record<string, unknown>) => Promise<unknown>;
-};
 
 interface IconProps extends React.SVGAttributes<SVGSVGElement> {
     /** Size in pixels — applied to both width and height. Default: 20 */
