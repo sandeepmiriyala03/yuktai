@@ -18,22 +18,32 @@ export type GridToolResult<T = unknown> = {
   data?: T;
 };
 
-export function searchGrid<T extends Record<string, unknown>>(
+export function searchGrid<
+  T extends Record<string, unknown>
+>(
   context: GridToolContext<T>,
   query: string
 ): GridToolResult<T[]> {
-  const text = query.trim().toLowerCase();
+  const text = query
+    .trim()
+    .toLowerCase();
 
-  const rows = context.data.filter((row) =>
-    context.columns.some((column) =>
-      String(row[column.key] ?? "")
-        .toLowerCase()
-        .includes(text)
-    )
+  const rows = context.data.filter(
+    (row) =>
+      context.columns.some(
+        (column) =>
+          String(
+            row[column.key] ?? ""
+          )
+            .toLowerCase()
+            .includes(text)
+      )
   );
 
   const ids = rows
-    .map((row) => String(row.id ?? ""))
+    .map((row) =>
+      String(row.id ?? "")
+    )
     .filter(Boolean);
 
   context.onHighlightRows?.(ids);
@@ -65,12 +75,15 @@ export function getColumns<T>(
   };
 }
 
-export function getRow<T extends Record<string, unknown>>(
+export function getRow<
+  T extends Record<string, unknown>
+>(
   context: GridToolContext<T>,
   id: string
 ): GridToolResult<T> {
   const row = context.data.find(
-    (item) => String(item.id ?? "") === id
+    (item) =>
+      String(item.id ?? "") === id
   );
 
   if (!row) {
@@ -87,7 +100,9 @@ export function getRow<T extends Record<string, unknown>>(
   };
 }
 
-export function highlightRows<T extends Record<string, unknown>>(
+export function highlightRows<
+  T extends Record<string, unknown>
+>(
   context: GridToolContext<T>,
   ids: string[]
 ): GridToolResult<string[]> {
@@ -100,7 +115,9 @@ export function highlightRows<T extends Record<string, unknown>>(
   };
 }
 
-export function selectRow<T extends Record<string, unknown>>(
+export function selectRow<
+  T extends Record<string, unknown>
+>(
   context: GridToolContext<T>,
   id: string
 ): GridToolResult<string> {
@@ -113,7 +130,9 @@ export function selectRow<T extends Record<string, unknown>>(
   };
 }
 
-export function openRow<T extends Record<string, unknown>>(
+export function openRow<
+  T extends Record<string, unknown>
+>(
   context: GridToolContext<T>,
   id: string
 ): GridToolResult<string> {

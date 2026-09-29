@@ -29,11 +29,13 @@ export { wcagPlugin as wcag } from "./core/renderer";
 export { Runtime } from "./runtime/runtime";
 
 
-// ─── Grid component ─────────────────────────────────────────────────────────
 export { YuktaiGrid } from "./grid/YuktaiGrid";
+
 export { useGrid } from "./grid/useGrid";
 
-export { default as YuktaiGridAI } from "./grid/YuktaiGridAI";
+export {
+  default as YuktaiGridAI,
+} from "./grid/YuktaiGridAI";
 
 export {
   default as YuktaiGridWebMCP,

@@ -111,40 +111,16 @@ declare const voicePlugin: {
     execute(input: string): Promise<string>;
 };
 
-interface YuktaiGridAIProps$1<T> {
-    data: T[];
-    columns: {
-        key: string;
-        label: string;
-        type?: "number" | "text" | "date";
-    }[];
-    onSearch: (query: string) => void;
-    onSort?: (key: string, dir: "asc" | "desc") => void;
-    theme?: "light" | "dark";
-    language?: "en-US" | "en-IN" | "hi-IN" | "te-IN";
-}
-declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, }: YuktaiGridAIProps$1<T>): react_jsx_runtime.JSX.Element;
-
 interface GridColumn<T = Record<string, unknown>> {
-    /** Unique key — must match a property in your data */
     key: keyof T & string;
-    /** Display label for the header */
     label: string;
-    /** Allow sorting on this column (default: true) */
     sortable?: boolean;
-    /** Allow filtering on this column (default: true) */
     filterable?: boolean;
-    /** Hide this column on mobile (default: false) */
     hiddenOnMobile?: boolean;
-    /** Pin this column on tablet view */
     pinned?: boolean;
-    /** Column width — number (px) or string (%, fr) */
     width?: number | string;
-    /** Custom cell renderer */
     render?: (value: T[keyof T], row: T, index: number) => ReactNode;
-    /** Cell alignment */
     align?: "left" | "center" | "right";
-    /** Type — affects default formatting and filter UI */
     type?: "text" | "number" | "date" | "boolean" | "badge";
 }
 type SortDirection = "asc" | "desc" | null;
@@ -162,23 +138,15 @@ type ViewMode = "table" | "card" | "auto";
 type GridTheme = "default" | "high-contrast" | "dark" | "color-blind" | "dyslexia";
 type GridLocale = "en-IN" | "en-US" | "te-IN" | "hi-IN" | "ta-IN" | "bn-IN" | "mr-IN" | "kn-IN" | "ml-IN" | "gu-IN" | "pa-IN" | "ur-IN";
 interface AIFeatures {
-    /** Enable AI semantic search */
     search?: boolean;
-    /** Enable AI row summary */
     summary?: boolean;
-    /** Enable anomaly detection */
     anomaly?: boolean;
-    /** Enable suggestions */
     suggest?: boolean;
 }
 interface VoiceFeatures {
-    /** Voice commands for search/filter/sort */
     control?: boolean;
-    /** Read rows aloud on focus */
     speakOnFocus?: boolean;
-    /** Read filtered data summary aloud */
     speakSummary?: boolean;
-    /** Voice language (defaults to locale) */
     language?: string;
 }
 interface PaginationConfig {
@@ -203,43 +171,36 @@ interface GridTranslations {
     ask: string;
 }
 interface YuktaiGridProps<T = Record<string, unknown>> {
-    /** The data to display */
     data: T[];
-    /** Column definitions */
     columns: GridColumn<T>[];
-    /** View mode — "auto" picks based on screen size */
     view?: ViewMode;
-    /** Mobile breakpoint in pixels (default: 768) */
     mobileBreakpoint?: number;
-    /** WCAG theme (default: "default") */
     theme?: GridTheme;
-    /** Locale (default: "en-US") */
     locale?: GridLocale;
-    /** AI features */
     ai?: boolean | AIFeatures;
-    /** Voice features */
     voice?: boolean | VoiceFeatures;
-    /** Pagination */
     pagination?: boolean | PaginationConfig;
-    /** Show search bar */
     search?: boolean;
-    /** Multi-row selection */
     selectable?: boolean;
-    /** Selected row keys */
     selectedKeys?: string[];
-    /** Row key field (default: "id") */
     rowKey?: keyof T & string;
-    /** Loading state */
     loading?: boolean;
-    /** Custom empty state */
     empty?: ReactNode;
-    /** Callbacks */
+    highlightIds?: (string | number)[];
+    highlightColor?: string;
+    autoScrollToHighlight?: boolean;
     onSelectionChange?: (keys: string[]) => void;
     onRowClick?: (row: T, index: number) => void;
     onSortChange?: (sort: SortConfig | null) => void;
-    /** Custom className */
     className?: string;
 }
+
+type YuktaiGridPropsWithHighlight<T extends Record<string, unknown>> = YuktaiGridProps<T> & {
+    highlightIds?: (string | number)[];
+    highlightColor?: string;
+    autoScrollToHighlight?: boolean;
+};
+declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, rowKey, view, mobileBreakpoint, theme, locale, search, selectable, selectedKeys, onSelectionChange, pagination, loading, highlightIds, highlightColor, autoScrollToHighlight, onRowClick, onSortChange, empty, className, }: YuktaiGridPropsWithHighlight<T>): react_jsx_runtime.JSX.Element;
 
 interface UseGridOptions<T> {
     data: T[];

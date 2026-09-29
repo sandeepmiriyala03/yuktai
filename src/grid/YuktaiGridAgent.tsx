@@ -28,19 +28,28 @@ export function useYuktaiGridAgent({
       name: string,
       input: Record<string, unknown> = {}
     ) => {
-      const tool = tools.find((item) => item.name === name);
+      const tool = tools.find(
+        (item) => item.name === name
+      );
 
       if (!tool) {
-        const error = new Error(`Tool "${name}" not found.`);
+        const error = new Error(
+          `Tool "${name}" not found.`
+        );
+
         onError?.(error);
+
         throw error;
       }
 
       setLoading(true);
 
       try {
-        const result = await tool.execute(input);
+        const result =
+          await tool.execute(input);
+
         onResult?.(result);
+
         return result;
       } catch (error) {
         const normalizedError =
@@ -49,6 +58,7 @@ export function useYuktaiGridAgent({
             : new Error(String(error));
 
         onError?.(normalizedError);
+
         throw normalizedError;
       } finally {
         setLoading(false);
