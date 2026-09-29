@@ -1,4 +1,4 @@
-export type GridColumn = {
+export type GridToolColumn = {
   key: string;
   label: string;
   type?: "text" | "number" | "date";
@@ -6,7 +6,7 @@ export type GridColumn = {
 
 export type GridToolContext<T> = {
   data: T[];
-  columns: GridColumn[];
+  columns: GridToolColumn[];
   onSelectRow?: (id: string) => void;
   onHighlightRows?: (ids: string[]) => void;
   onOpenRow?: (id: string) => void;
@@ -57,7 +57,7 @@ export function countGrid<T>(
 
 export function getColumns<T>(
   context: GridToolContext<T>
-): GridToolResult<GridColumn[]> {
+): GridToolResult<GridToolColumn[]> {
   return {
     success: true,
     message: "Grid columns retrieved.",

@@ -28,7 +28,7 @@ export { wcagPlugin as wcag } from "./core/renderer";
 // ─── Runtime ─────────────────────────────────────────────────────────────────
 export { Runtime } from "./runtime/runtime";
 
-// ─── Grid component ─────────────────────────────────────────────────────────
+
 // ─── Grid component ─────────────────────────────────────────────────────────
 export { YuktaiGrid } from "./grid/YuktaiGrid";
 export { useGrid } from "./grid/useGrid";
@@ -68,6 +68,7 @@ export {
 } from "./grid/gridTools";
 
 export type {
+  GridToolColumn,
   GridToolContext,
   GridToolResult,
 } from "./grid/gridTools";

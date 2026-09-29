@@ -125,7 +125,7 @@ interface YuktaiGridAIProps$1<T> {
 }
 declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, }: YuktaiGridAIProps$1<T>): react_jsx_runtime.JSX.Element;
 
-interface GridColumn$1<T = Record<string, unknown>> {
+interface GridColumn<T = Record<string, unknown>> {
     /** Unique key — must match a property in your data */
     key: keyof T & string;
     /** Display label for the header */
@@ -206,7 +206,7 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
     /** The data to display */
     data: T[];
     /** Column definitions */
-    columns: GridColumn$1<T>[];
+    columns: GridColumn<T>[];
     /** View mode — "auto" picks based on screen size */
     view?: ViewMode;
     /** Mobile breakpoint in pixels (default: 768) */
@@ -243,7 +243,7 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
 
 interface UseGridOptions<T> {
     data: T[];
-    columns: GridColumn$1<T>[];
+    columns: GridColumn<T>[];
     pagination?: boolean | PaginationConfig;
     mobileBreakpoint?: number;
 }
@@ -326,14 +326,14 @@ declare function useYuktaiGridAgent({ tools, onResult, onError, }: YuktaiGridAge
     executeTool: (name: string, input?: Record<string, unknown>) => Promise<unknown>;
 };
 
-type GridColumn = {
+type GridToolColumn = {
     key: string;
     label: string;
     type?: "text" | "number" | "date";
 };
 type GridToolContext<T> = {
     data: T[];
-    columns: GridColumn[];
+    columns: GridToolColumn[];
     onSelectRow?: (id: string) => void;
     onHighlightRows?: (ids: string[]) => void;
     onOpenRow?: (id: string) => void;
@@ -345,7 +345,7 @@ type GridToolResult<T = unknown> = {
 };
 declare function searchGrid<T extends Record<string, unknown>>(context: GridToolContext<T>, query: string): GridToolResult<T[]>;
 declare function countGrid<T>(context: GridToolContext<T>): GridToolResult<number>;
-declare function getColumns<T>(context: GridToolContext<T>): GridToolResult<GridColumn[]>;
+declare function getColumns<T>(context: GridToolContext<T>): GridToolResult<GridToolColumn[]>;
 declare function getRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<T>;
 declare function highlightRows<T extends Record<string, unknown>>(context: GridToolContext<T>, ids: string[]): GridToolResult<string[]>;
 declare function selectRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<string>;
@@ -416,4 +416,4 @@ declare const YuktAI: {
     scan(): A11yReport;
 };
 
-export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridAgentTool, type GridColumn$1 as GridColumn, type GridLocale, type GridTheme, type GridToolContext, type GridToolResult, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, YuktaiGridAI, type YuktaiGridAIProps, useYuktaiGridAgent as YuktaiGridAgent, type YuktaiGridAgentProps, type YuktaiGridProps, YuktaiGridWebMCP, type YuktaiGridWebMCPProps, aiPlugin, countGrid, YuktAIWrapper as default, getColumns, getRow, highlightRows, openRow, searchGrid, selectRow, useGrid, useYuktaiGridAgent, voicePlugin, wcagPlugin as wcag, wcagPlugin };
+export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridAgentTool, type GridColumn, type GridLocale, type GridTheme, type GridToolColumn, type GridToolContext, type GridToolResult, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, YuktaiGridAI, type YuktaiGridAIProps, useYuktaiGridAgent as YuktaiGridAgent, type YuktaiGridAgentProps, type YuktaiGridProps, YuktaiGridWebMCP, type YuktaiGridWebMCPProps, aiPlugin, countGrid, YuktAIWrapper as default, getColumns, getRow, highlightRows, openRow, searchGrid, selectRow, useGrid, useYuktaiGridAgent, voicePlugin, wcagPlugin as wcag, wcagPlugin };

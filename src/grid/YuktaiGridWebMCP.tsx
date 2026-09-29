@@ -10,7 +10,7 @@ import {
   openRow,
   searchGrid,
   selectRow,
-  type GridColumn,
+  type GridToolColumn,
   type GridToolContext,
 } from "./gridTools";
 
@@ -69,7 +69,7 @@ export default function YuktaiGridWebMCP<
 
     const context: GridToolContext<T> = {
       data,
-      columns: columns as GridColumn[],
+      columns: columns as GridToolColumn[],
       onSelectRow,
       onHighlightRows,
       onOpenRow,
