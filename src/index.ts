@@ -29,9 +29,49 @@ export { wcagPlugin as wcag } from "./core/renderer";
 export { Runtime } from "./runtime/runtime";
 
 // ─── Grid component ─────────────────────────────────────────────────────────
+// ─── Grid component ─────────────────────────────────────────────────────────
 export { YuktaiGrid } from "./grid/YuktaiGrid";
-export { useGrid }   from "./grid/useGrid";
-export type { YuktaiGridAIProps } from "./grid/YuktaiGridAI";
+export { useGrid } from "./grid/useGrid";
+
+export { default as YuktaiGridAI } from "./grid/YuktaiGridAI";
+
+export {
+  default as YuktaiGridWebMCP,
+} from "./grid/YuktaiGridWebMCP";
+
+export {
+  default as YuktaiGridAgent,
+  useYuktaiGridAgent,
+} from "./grid/YuktaiGridAgent";
+
+export type {
+  YuktaiGridAIProps,
+} from "./grid/YuktaiGridAI";
+
+export type {
+  YuktaiGridWebMCPProps,
+} from "./grid/YuktaiGridWebMCP";
+
+export type {
+  GridAgentTool,
+  YuktaiGridAgentProps,
+} from "./grid/YuktaiGridAgent";
+
+export {
+  searchGrid,
+  countGrid,
+  getColumns,
+  getRow,
+  highlightRows,
+  selectRow,
+  openRow,
+} from "./grid/gridTools";
+
+export type {
+  GridToolContext,
+  GridToolResult,
+} from "./grid/gridTools";
+
 export type {
   GridColumn,
   SortConfig,
@@ -47,7 +87,6 @@ export type {
   GridTranslations,
   YuktaiGridProps,
 } from "./grid/types";
-
 // ─── Icons ─────────────────────────────────────────────────────────────────
 export {
   IconBase,
