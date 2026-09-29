@@ -3,9 +3,12 @@
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+
+type Language = "en-US" | "te-IN";
 
 interface ChatMessage {
   role: "user" | "ai";
@@ -26,16 +29,306 @@ export interface YuktaiGridAIProps<T> {
     dir: "asc" | "desc"
   ) => void;
   theme?: "light" | "dark";
-  language?: "en-US" | "en-IN" | "hi-IN" | "te-IN";
+
+  /**
+   * Language of AI UI and AI responses.
+   * Default: English.
+   */
+  language?: Language;
+
+  /**
+   * Language used by browser voice recognition.
+   * Default: English.
+   */
+  inputLanguage?: Language;
+
+  /**
+   * When true, AI is rendered inside the grid.
+   * When false, AI uses the floating assistant UI.
+   */
+  embedded?: boolean;
 }
 
-function parseIntent(text: string): {
-  type: string;
+const translations: Record<
+  Language,
+  {
+    title: string;
+    subtitle: string;
+    ask: string;
+    placeholder: string;
+    listening: string;
+    send: string;
+    close: string;
+    open: string;
+    inputLanguage: string;
+    english: string;
+    telugu: string;
+
+    searchStarted: (value: string) => string;
+    sortedAscending: (column: string) => string;
+    sortedDescending: (column: string) => string;
+
+    count: (value: number) => string;
+    highest: (
+      column: string,
+      value: string,
+      name: string
+    ) => string;
+    lowest: (
+      column: string,
+      value: string,
+      name: string
+    ) => string;
+    average: (
+      column: string,
+      value: string
+    ) => string;
+    total: (
+      column: string,
+      value: string
+    ) => string;
+
+    noData: string;
+    noColumn: string;
+    noNumericData: (column: string) => string;
+    notFound: (value: string) => string;
+    needName: string;
+    fallback: string;
+    unsupportedVoice: string;
+  }
+> = {
+  "en-US": {
+    title: "Grid AI Assistant",
+    subtitle: "Ask about your data",
+    ask: "Ask",
+    placeholder: "Ask or type a command...",
+    listening: "Listening...",
+    send: "Send",
+    close: "Close",
+    open: "Open AI assistant",
+    inputLanguage: "Input language",
+    english: "English",
+    telugu: "తెలుగు",
+
+    searchStarted: (value) =>
+      `Searching for "${value}".`,
+
+    sortedAscending: (column) =>
+      `Sorted by ${column} in ascending order.`,
+
+    sortedDescending: (column) =>
+      `Sorted by ${column} in descending order.`,
+
+    count: (value) =>
+      `There are ${value} rows in the grid.`,
+
+    highest: (column, value, name) =>
+      `The highest ${column} is ${value}, held by ${name}.`,
+
+    lowest: (column, value, name) =>
+      `The lowest ${column} is ${value}, held by ${name}.`,
+
+    average: (column, value) =>
+      `The average ${column} is ${value}.`,
+
+    total: (column, value) =>
+      `The total ${column} is ${value}.`,
+
+    noData:
+      "There is no data to analyze.",
+
+    noColumn:
+      "I could not find a column to analyze.",
+
+    noNumericData: (column) =>
+      `There is no numeric data in ${column}.`,
+
+    notFound: (value) =>
+      `I could not find anything matching "${value}".`,
+
+    needName:
+      "Please provide a value to look up.",
+
+    fallback:
+      "I can search, sort, count, and analyze the grid data.",
+
+    unsupportedVoice:
+      "Voice input is not supported in this browser.",
+  },
+
+  "te-IN": {
+    title: "గ్రిడ్ AI సహాయకుడు",
+    subtitle: "మీ డేటా గురించి అడగండి",
+    ask: "అడగండి",
+    placeholder: "ప్రశ్న లేదా ఆదేశం టైప్ చేయండి...",
+    listening: "వింటున్నాను...",
+    send: "పంపండి",
+    close: "మూసివేయండి",
+    open: "AI సహాయకుడిని తెరవండి",
+    inputLanguage: "ఇన్‌పుట్ భాష",
+    english: "English",
+    telugu: "తెలుగు",
+
+    searchStarted: (value) =>
+      `“${value}” కోసం శోధిస్తున్నాను.`,
+
+    sortedAscending: (column) =>
+      `${column}ను ఆరోహణ క్రమంలో అమర్చాను.`,
+
+    sortedDescending: (column) =>
+      `${column}ను అవరోహణ క్రమంలో అమర్చాను.`,
+
+    count: (value) =>
+      `గ్రిడ్‌లో మొత్తం ${value} వరుసలు ఉన్నాయి.`,
+
+    highest: (column, value, name) =>
+      `అత్యధిక ${column} విలువ ${value}. ఇది ${name}కు సంబంధించినది.`,
+
+    lowest: (column, value, name) =>
+      `అత్యల్ప ${column} విలువ ${value}. ఇది ${name}కు సంబంధించినది.`,
+
+    average: (column, value) =>
+      `${column} సగటు విలువ ${value}.`,
+
+    total: (column, value) =>
+      `${column} మొత్తం విలువ ${value}.`,
+
+    noData:
+      "విశ్లేషించడానికి డేటా లేదు.",
+
+    noColumn:
+      "విశ్లేషించడానికి తగిన కాలమ్ కనబడలేదు.",
+
+    noNumericData: (column) =>
+      `${column}లో సంఖ్యా సమాచారం లేదు.`,
+
+    notFound: (value) =>
+      `“${value}”కు సరిపోలే సమాచారం కనబడలేదు.`,
+
+    needName:
+      "శోధించడానికి ఒక విలువ ఇవ్వండి.",
+
+    fallback:
+      "గ్రిడ్‌లో శోధన, క్రమబద్ధీకరణ, లెక్కింపు మరియు డేటా విశ్లేషణ చేయగలను.",
+
+    unsupportedVoice:
+      "ఈ బ్రౌజర్‌లో వాయిస్ ఇన్‌పుట్‌కు మద్దతు లేదు.",
+  },
+};
+
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function parseIntent(
+  text: string,
+  language: Language
+): {
+  type:
+    | "search"
+    | "sort"
+    | "question";
   payload?: any;
 } {
-  const t = text.toLowerCase().trim();
+  const t = normalize(text);
 
-  if (/^(search|find|show|filter)/.test(t)) {
+  if (language === "te-IN") {
+    if (
+      /^(శోధించు|శోధించండి|వెతుకు|వెతకండి|చూపించు|చూపించండి|ఫిల్టర్)/.test(
+        t
+      )
+    ) {
+      const term = t
+        .replace(
+          /^(శోధించు|శోధించండి|వెతుకు|వెతకండి|చూపించు|చూపించండి|ఫిల్టర్)\s*/u,
+          ""
+        )
+        .trim();
+
+      return {
+        type: "search",
+        payload: term || text,
+      };
+    }
+
+    if (
+      /క్రమబద్ధీకర|అమర్చ|సార్ట్/.test(t)
+    ) {
+      const desc =
+        /అవరోహణ|పెద్ద|అధిక|చివర/.test(t);
+
+      return {
+        type: "sort",
+        payload: {
+          key: undefined,
+          dir: desc ? "desc" : "asc",
+        },
+      };
+    }
+
+    if (
+      /ఎన్ని|ఎంతమంది|లెక్క|మొత్తం వరుస|వరుసలు/.test(
+        t
+      )
+    ) {
+      return {
+        type: "question",
+        payload: text,
+      };
+    }
+
+    if (
+      /అత్యధిక|గరిష్ఠ|పెద్ద|ఎక్కువ/.test(
+        t
+      )
+    ) {
+      return {
+        type: "question",
+        payload: text,
+      };
+    }
+
+    if (
+      /అత్యల్ప|కనిష్ఠ|చిన్న|తక్కువ/.test(
+        t
+      )
+    ) {
+      return {
+        type: "question",
+        payload: text,
+      };
+    }
+
+    if (
+      /సగటు|సగటు విలువ/.test(t)
+    ) {
+      return {
+        type: "question",
+        payload: text,
+      };
+    }
+
+    if (
+      /మొత్తం|కలిపి/.test(t)
+    ) {
+      return {
+        type: "question",
+        payload: text,
+      };
+    }
+
+    return {
+      type: "search",
+      payload: text,
+    };
+  }
+
+  if (
+    /^(search|find|show|filter)/.test(t)
+  ) {
     const term = t
       .replace(
         /^(search|find|show|filter)\s+(for\s+|by\s+)?/,
@@ -45,30 +338,31 @@ function parseIntent(text: string): {
 
     return {
       type: "search",
-      payload: term,
+      payload: term || text,
     };
   }
 
   if (/sort/.test(t)) {
-    const dir = /desc|high|large|top/.test(t)
-      ? "desc"
-      : "asc";
+    const desc =
+      /desc|descending|high|higher|large|largest|top/.test(
+        t
+      );
 
-    const key = t.match(
-      /(name|age|salary|role|email|date)/
-    )?.[1];
+    const keyMatch = t.match(
+      /(?:by|on)\s+([a-z0-9_-]+)/
+    );
 
     return {
       type: "sort",
       payload: {
-        key,
-        dir,
+        key: keyMatch?.[1],
+        dir: desc ? "desc" : "asc",
       },
     };
   }
 
   if (
-    /^(who|what|which|how many|highest|lowest|max|min|average|avg|total|sum)/.test(
+    /how many|count|highest|maximum|max|top|largest|lowest|minimum|min|smallest|bottom|average|avg|mean|sum|total|who|which|where|whose/.test(
       t
     )
   ) {
@@ -84,219 +378,397 @@ function parseIntent(text: string): {
   };
 }
 
+function findReferencedColumn<T>(
+  question: string,
+  columns: YuktaiGridAIProps<T>["columns"]
+) {
+  const q = normalize(question);
+
+  return columns.find(
+    (column) => {
+      const key = normalize(column.key);
+      const label = normalize(column.label);
+
+      return (
+        q.includes(key) ||
+        q.includes(label)
+      );
+    }
+  );
+}
+
+function formatNumber(
+  value: number,
+  language: Language
+): string {
+  return value.toLocaleString(
+    language === "te-IN"
+      ? "te-IN"
+      : "en-IN"
+  );
+}
+
 function answerQuestion<
   T extends Record<string, unknown>
 >(
   question: string,
   data: T[],
-  columns: YuktaiGridAIProps<T>["columns"]
+  columns: YuktaiGridAIProps<T>["columns"],
+  language: Language
 ): string {
+  const t = translations[language];
+
   if (data.length === 0) {
-    return "There is no data to analyze.";
+    return t.noData;
   }
 
-  const q = question.toLowerCase();
+  const q = normalize(question);
 
-  if (/how many|count|total/.test(q)) {
-    return `There are ${data.length} rows in the grid.`;
+  const numericColumns =
+    columns.filter(
+      (column) =>
+        column.type === "number"
+    );
+
+  const referencedColumn =
+    findReferencedColumn(
+      question,
+      columns
+    );
+
+  const selectedNumericColumn =
+    referencedColumn?.type === "number"
+      ? referencedColumn
+      : numericColumns[0];
+
+  const isCountQuestion =
+    /how many|count|rows|ఎన్ని|ఎంతమంది|లెక్క|వరుసలు/.test(
+      q
+    );
+
+  if (isCountQuestion) {
+    return t.count(data.length);
   }
 
-  const numericCols = columns.filter(
-    (column) => column.type === "number"
-  );
+  const isHighest =
+    /highest|maximum|max|top|largest|అత్యధిక|గరిష్ఠ|పెద్ద|ఎక్కువ/.test(
+      q
+    );
 
-  const referencedCol = columns.find(
-    (column) =>
-      q.includes(column.label.toLowerCase()) ||
-      q.includes(column.key.toLowerCase())
-  );
+  if (isHighest) {
+    const column =
+      referencedColumn ??
+      selectedNumericColumn;
 
-  if (
-    /highest|maximum|max|top|largest/.test(q)
-  ) {
-    const col =
-      referencedCol ?? numericCols[0];
-
-    if (!col) {
-      return "I could not find a column to analyze.";
+    if (!column) {
+      return t.noColumn;
     }
 
     const values = data
       .map((row) => ({
         row,
-        val: Number(row[col.key]),
+        value: Number(
+          row[column.key]
+        ),
       }))
-      .filter((item) => !isNaN(item.val))
-      .sort((a, b) => b.val - a.val);
+      .filter(
+        (item) =>
+          !Number.isNaN(item.value)
+      )
+      .sort(
+        (a, b) =>
+          b.value - a.value
+      );
 
     if (values.length === 0) {
-      return `No numeric data in ${col.label}.`;
+      return t.noNumericData(
+        column.label
+      );
     }
 
     const top = values[0];
 
-    const nameCol = columns.find(
-      (column) =>
-        column.key === "name" ||
-        column.label.toLowerCase() === "name"
+    const nameColumn =
+      columns.find(
+        (columnItem) =>
+          columnItem.key === "name" ||
+          normalize(
+            columnItem.label
+          ) === "name"
+      );
+
+    const name = nameColumn
+      ? String(
+          top.row[
+            nameColumn.key
+          ] ?? ""
+        )
+      : language === "te-IN"
+      ? "ఈ వరుస"
+      : "this row";
+
+    return t.highest(
+      column.label,
+      formatNumber(
+        top.value,
+        language
+      ),
+      name
     );
-
-    const name = nameCol
-      ? String(top.row[nameCol.key])
-      : `Row ${data.indexOf(top.row) + 1}`;
-
-    return `The highest ${
-      col.label
-    } is ${top.val.toLocaleString(
-      "en-IN"
-    )}, held by ${name}.`;
   }
 
-  if (
-    /lowest|minimum|min|smallest|bottom/.test(q)
-  ) {
-    const col =
-      referencedCol ?? numericCols[0];
+  const isLowest =
+    /lowest|minimum|min|smallest|bottom|అత్యల్ప|కనిష్ఠ|చిన్న|తక్కువ/.test(
+      q
+    );
 
-    if (!col) {
-      return "I could not find a column to analyze.";
+  if (isLowest) {
+    const column =
+      referencedColumn ??
+      selectedNumericColumn;
+
+    if (!column) {
+      return t.noColumn;
     }
 
     const values = data
       .map((row) => ({
         row,
-        val: Number(row[col.key]),
+        value: Number(
+          row[column.key]
+        ),
       }))
-      .filter((item) => !isNaN(item.val))
-      .sort((a, b) => a.val - b.val);
+      .filter(
+        (item) =>
+          !Number.isNaN(item.value)
+      )
+      .sort(
+        (a, b) =>
+          a.value - b.value
+      );
 
     if (values.length === 0) {
-      return `No numeric data in ${col.label}.`;
+      return t.noNumericData(
+        column.label
+      );
     }
 
     const bottom = values[0];
 
-    const nameCol = columns.find(
-      (column) =>
-        column.key === "name" ||
-        column.label.toLowerCase() === "name"
-    );
-
-    const name = nameCol
-      ? String(bottom.row[nameCol.key])
-      : `Row ${data.indexOf(bottom.row) + 1}`;
-
-    return `The lowest ${
-      col.label
-    } is ${bottom.val.toLocaleString(
-      "en-IN"
-    )}, held by ${name}.`;
-  }
-
-  if (/average|avg|mean/.test(q)) {
-    const col =
-      referencedCol ?? numericCols[0];
-
-    if (!col) {
-      return "I could not find a column to analyze.";
-    }
-
-    const values = data
-      .map((row) => Number(row[col.key]))
-      .filter((value) => !isNaN(value));
-
-    if (values.length === 0) {
-      return `No numeric data in ${col.label}.`;
-    }
-
-    const avg =
-      values.reduce((a, b) => a + b, 0) /
-      values.length;
-
-    return `The average ${
-      col.label
-    } is ${Math.round(avg).toLocaleString(
-      "en-IN"
-    )}.`;
-  }
-
-  if (/sum|total/.test(q)) {
-    const col =
-      referencedCol ?? numericCols[0];
-
-    if (!col) {
-      return "I could not find a column to analyze.";
-    }
-
-    const values = data
-      .map((row) => Number(row[col.key]))
-      .filter((value) => !isNaN(value));
-
-    if (values.length === 0) {
-      return `No numeric data in ${col.label}.`;
-    }
-
-    const sum = values.reduce(
-      (a, b) => a + b,
-      0
-    );
-
-    return `The total ${
-      col.label
-    } is ${sum.toLocaleString("en-IN")}.`;
-  }
-
-  if (/who|where|which|whose/.test(q)) {
-    const nameMatch = q
-      .match(/\b([a-z]{3,})\b/g)
-      ?.filter(
-        (word) =>
-          ![
-            "who",
-            "where",
-            "which",
-            "whose",
-            "what",
-            "is",
-            "the",
-            "has",
-            "have",
-          ].includes(word)
+    const nameColumn =
+      columns.find(
+        (columnItem) =>
+          columnItem.key === "name" ||
+          normalize(
+            columnItem.label
+          ) === "name"
       );
 
-    if (!nameMatch) {
-      return "I need a name to look up.";
-    }
+    const name = nameColumn
+      ? String(
+          bottom.row[
+            nameColumn.key
+          ] ?? ""
+        )
+      : language === "te-IN"
+      ? "ఈ వరుస"
+      : "this row";
 
-    const searchTerm = nameMatch.join(" ");
-
-    const found = data.find((row) =>
-      Object.values(row).some((value) =>
-        String(value)
-          .toLowerCase()
-          .includes(searchTerm)
-      )
+    return t.lowest(
+      column.label,
+      formatNumber(
+        bottom.value,
+        language
+      ),
+      name
     );
-
-    if (!found) {
-      return `I could not find anyone matching "${searchTerm}".`;
-    }
-
-    return columns
-      .map(
-        (column) =>
-          `${column.label}: ${String(
-            found[column.key] ?? ""
-          )}`
-      )
-      .join(", ");
   }
 
-  return "I understand you have a question. Try asking 'highest salary' or 'how many rows'.";
+  const isAverage =
+    /average|avg|mean|సగటు/.test(q);
+
+  if (isAverage) {
+    const column =
+      referencedColumn ??
+      selectedNumericColumn;
+
+    if (!column) {
+      return t.noColumn;
+    }
+
+    const values = data
+      .map((row) =>
+        Number(row[column.key])
+      )
+      .filter(
+        (value) =>
+          !Number.isNaN(value)
+      );
+
+    if (values.length === 0) {
+      return t.noNumericData(
+        column.label
+      );
+    }
+
+    const average =
+      values.reduce(
+        (sum, value) =>
+          sum + value,
+        0
+      ) / values.length;
+
+    return t.average(
+      column.label,
+      formatNumber(
+        Math.round(
+          average * 100
+        ) / 100,
+        language
+      )
+    );
+  }
+
+  const isSum =
+    /sum|total|మొత్తం|కలిపి/.test(q);
+
+  if (
+    isSum &&
+    !isCountQuestion
+  ) {
+    const column =
+      referencedColumn ??
+      selectedNumericColumn;
+
+    if (!column) {
+      return t.noColumn;
+    }
+
+    const values = data
+      .map((row) =>
+        Number(row[column.key])
+      )
+      .filter(
+        (value) =>
+          !Number.isNaN(value)
+      );
+
+    if (values.length === 0) {
+      return t.noNumericData(
+        column.label
+      );
+    }
+
+    const total =
+      values.reduce(
+        (sum, value) =>
+          sum + value,
+        0
+      );
+
+    return t.total(
+      column.label,
+      formatNumber(
+        total,
+        language
+      )
+    );
+  }
+
+  const queryWords =
+    q.match(
+      /[\p{L}\p{N}_-]+/gu
+    ) ?? [];
+
+  const ignored = new Set([
+    "who",
+    "what",
+    "which",
+    "where",
+    "whose",
+    "is",
+    "the",
+    "has",
+    "have",
+    "show",
+    "find",
+    "search",
+    "for",
+    "by",
+    "about",
+  ]);
+
+  const meaningfulWords =
+    queryWords.filter(
+      (word) => !ignored.has(word)
+    );
+
+  const searchTerm =
+    meaningfulWords.join(" ").trim();
+
+  if (searchTerm) {
+    const found = data.find(
+      (row) =>
+        Object.values(row).some(
+          (value) =>
+            String(value ?? "")
+              .toLowerCase()
+              .includes(
+                searchTerm.toLowerCase()
+              )
+        )
+    );
+
+    if (found) {
+      return columns
+        .map(
+          (column) =>
+            `${column.label}: ${String(
+              found[column.key] ?? ""
+            )}`
+        )
+        .join(
+          language === "te-IN"
+            ? " · "
+            : ", "
+        );
+    }
+
+    return t.notFound(searchTerm);
+  }
+
+  return t.fallback;
+}
+
+function speak(
+  text: string,
+  language: Language
+) {
+  if (
+    typeof window === "undefined" ||
+    !window.speechSynthesis
+  ) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance =
+    new SpeechSynthesisUtterance(
+      text
+    );
+
+  utterance.lang = language;
+  utterance.rate = 1;
+  utterance.pitch = 1;
+
+  window.speechSynthesis.speak(
+    utterance
+  );
 }
 
 function useSpeechRecognition(
-  language: string = "en-US"
+  language: Language
 ) {
   const [listening, setListening] =
     useState(false);
@@ -311,17 +783,22 @@ function useSpeechRecognition(
     useRef<any>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (
+      typeof window === "undefined"
+    ) {
       return;
     }
 
     const SpeechRecognition =
-      (window as any).SpeechRecognition ||
+      (window as any)
+        .SpeechRecognition ||
       (window as any)
         .webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       setSupported(false);
+      recognitionRef.current =
+        null;
       return;
     }
 
@@ -335,10 +812,11 @@ function useSpeechRecognition(
     recognition.onresult = (
       event: any
     ) => {
-      const text =
-        event.results[0][0].transcript;
+      const value =
+        event?.results?.[0]?.[0]
+          ?.transcript ?? "";
 
-      setTranscript(text);
+      setTranscript(value);
       setListening(false);
     };
 
@@ -354,7 +832,14 @@ function useSpeechRecognition(
       recognition;
 
     return () => {
-      recognition.stop?.();
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore stop errors.
+      }
+
+      recognitionRef.current =
+        null;
     };
   }, [language]);
 
@@ -374,7 +859,12 @@ function useSpeechRecognition(
   }, []);
 
   const stop = useCallback(() => {
-    recognitionRef.current?.stop();
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      // Ignore stop errors.
+    }
+
     setListening(false);
   }, []);
 
@@ -387,28 +877,91 @@ function useSpeechRecognition(
   };
 }
 
-function speak(
-  text: string,
-  language: string
-) {
-  if (
-    typeof window === "undefined" ||
-    !window.speechSynthesis
-  ) {
-    return;
-  }
+function SearchIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle
+        cx="11"
+        cy="11"
+        r="6.5"
+      />
+      <path d="m16 16 5 5" />
+    </svg>
+  );
+}
 
-  window.speechSynthesis.cancel();
+function MicIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect
+        x="8"
+        y="3"
+        width="8"
+        height="12"
+        rx="4"
+      />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3" />
+      <path d="M8 21h8" />
+    </svg>
+  );
+}
 
-  const utterance =
-    new SpeechSynthesisUtterance(text);
+function SendIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m4 4 16 8-16 8 4-8-4-8Z" />
+      <path d="M8 12h12" />
+    </svg>
+  );
+}
 
-  utterance.lang = language;
-  utterance.rate = 1;
-  utterance.pitch = 1;
-
-  window.speechSynthesis.speak(
-    utterance
+function CloseIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 6 12 12" />
+      <path d="m18 6-12 12" />
+    </svg>
   );
 }
 
@@ -421,27 +974,20 @@ export function YuktaiGridAI<
   onSort,
   theme = "light",
   language = "en-US",
+  inputLanguage = "en-US",
+  embedded = false,
 }: YuktaiGridAIProps<T>) {
+  const t = translations[language];
+  const dark = theme === "dark";
+
   const [chatOpen, setChatOpen] =
-    useState(false);
+    useState(embedded);
 
   const [input, setInput] =
     useState("");
 
   const [messages, setMessages] =
-    useState<ChatMessage[]>([
-      {
-        role: "ai",
-        text: "Hi! Ask me anything about your data — like 'highest salary' or 'how many rows'. You can also say 'search Sandeep' or 'sort age descending'.",
-        time: new Date().toLocaleTimeString(
-          [],
-          {
-            hour: "2-digit",
-            minute: "2-digit",
-          }
-        ),
-      },
-    ]);
+    useState<ChatMessage[]>([]);
 
   const messagesEndRef =
     useRef<HTMLDivElement>(null);
@@ -452,111 +998,92 @@ export function YuktaiGridAI<
     supported,
     start,
     stop,
-  } = useSpeechRecognition(language);
+  } = useSpeechRecognition(
+    inputLanguage
+  );
 
-  const dark = theme === "dark";
+  const colors = useMemo(
+    () => ({
+      bg: dark
+        ? "#0F172A"
+        : "#FFFFFF",
 
-  const colors = {
-    bg: dark ? "#0F172A" : "#FFFFFF",
-    surface: dark
-      ? "#1E293B"
-      : "#F8FAFC",
-    border: dark
-      ? "#334155"
-      : "#E2E8F0",
-    text: dark
-      ? "#F1F5F9"
-      : "#0F172A",
-    muted: dark
-      ? "#94A3B8"
-      : "#64748B",
-    accent: "#10B981",
-    userMsg: dark
-      ? "#334155"
-      : "#DBEAFE",
-    aiMsg: dark
-      ? "#1E293B"
-      : "#F0FDF4",
-  };
+      surface: dark
+        ? "#1E293B"
+        : "#F8FAFC",
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [messages]);
+      border: dark
+        ? "#334155"
+        : "#E2E8F0",
 
-  const handleUserInput = useCallback(
-    (text: string) => {
-      if (!text.trim()) {
-        return;
-      }
+      text: dark
+        ? "#F1F5F9"
+        : "#0F172A",
 
-      const time =
-        new Date().toLocaleTimeString(
+      muted: dark
+        ? "#94A3B8"
+        : "#64748B",
+
+      accent: "#10B981",
+
+      userMsg: dark
+        ? "#334155"
+        : "#DBEAFE",
+
+      aiMsg: dark
+        ? "#1E293B"
+        : "#F0FDF4",
+    }),
+    [dark]
+  );
+
+  const initialMessage =
+    useMemo<ChatMessage>(
+      () => ({
+        role: "ai",
+        text:
+          language === "te-IN"
+            ? "మీ గ్రిడ్ డేటా గురించి ప్రశ్న అడగండి."
+            : "Ask me about your grid data.",
+        time: new Date().toLocaleTimeString(
           [],
           {
             hour: "2-digit",
             minute: "2-digit",
           }
-        );
+        ),
+      }),
+      [language]
+    );
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          role: "user",
-          text,
-          time,
-        },
-      ]);
-
-      setInput("");
-
-      const intent =
-        parseIntent(text);
-
-      let response = "";
-
-      if (intent.type === "search") {
-        onSearch(intent.payload);
-
-        response = `Searching for "${intent.payload}"...`;
-      } else if (
-        intent.type === "sort" &&
-        onSort
-      ) {
-        const {
-          key,
-          dir,
-        } = intent.payload;
-
-        if (key) {
-          onSort(key, dir);
-
-          response = `Sorted by ${key} (${
-            dir === "asc"
-              ? "ascending"
-              : "descending"
-          }).`;
-        } else {
-          response =
-            "Which column should I sort? Try 'sort by salary'.";
-        }
-      } else if (
-        intent.type === "question"
-      ) {
-        response =
-          answerQuestion(
-            intent.payload,
-            data,
-            columns
-          );
-      } else {
-        response =
-          "I could not understand that request.";
+  useEffect(() => {
+    setMessages((current) => {
+      if (current.length > 0) {
+        return current;
       }
 
-      setTimeout(() => {
-        const responseTime =
+      return [initialMessage];
+    });
+  }, [initialMessage]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView(
+      {
+        behavior: "smooth",
+      }
+    );
+  }, [messages]);
+
+  const handleUserInput =
+    useCallback(
+      (text: string) => {
+        const value = text.trim();
+
+        if (!value) {
+          return;
+        }
+
+        const userTime =
           new Date().toLocaleTimeString(
             [],
             {
@@ -565,26 +1092,145 @@ export function YuktaiGridAI<
             }
           );
 
-        setMessages((previous) => [
-          ...previous,
+        setMessages((current) => [
+          ...current,
           {
-            role: "ai",
-            text: response,
-            time: responseTime,
+            role: "user",
+            text: value,
+            time: userTime,
           },
         ]);
 
-        speak(response, language);
-      }, 400);
-    },
-    [
-      data,
-      columns,
-      language,
-      onSearch,
-      onSort,
-    ]
-  );
+        setInput("");
+
+        const intent = parseIntent(
+          value,
+          language
+        );
+
+        let response = "";
+
+        if (intent.type === "search") {
+          const query = String(
+            intent.payload ?? value
+          );
+
+          onSearch(query);
+
+          response = t.searchStarted(
+            query
+          );
+        }
+
+        if (intent.type === "sort") {
+          const requestedKey =
+            intent.payload?.key;
+
+          let column =
+            requestedKey
+              ? columns.find(
+                  (item) =>
+                    normalize(
+                      item.key
+                    ) ===
+                      normalize(
+                        requestedKey
+                      ) ||
+                    normalize(
+                      item.label
+                    ) ===
+                      normalize(
+                        requestedKey
+                      )
+                )
+              : undefined;
+
+          if (!column) {
+            column =
+              findReferencedColumn(
+                value,
+                columns
+              );
+          }
+
+          if (column && onSort) {
+            const direction =
+              intent.payload?.dir ===
+              "desc"
+                ? "desc"
+                : "asc";
+
+            onSort(
+              String(column.key),
+              direction
+            );
+
+            response =
+              direction === "asc"
+                ? t.sortedAscending(
+                    column.label
+                  )
+                : t.sortedDescending(
+                    column.label
+                  );
+          } else {
+            response = t.noColumn;
+          }
+        }
+
+        if (
+          intent.type === "question"
+        ) {
+          response =
+            answerQuestion(
+              intent.payload ??
+                value,
+              data,
+              columns,
+              language
+            );
+        }
+
+        if (!response) {
+          response = t.fallback;
+        }
+
+        window.setTimeout(() => {
+          const aiTime =
+            new Date().toLocaleTimeString(
+              [],
+              {
+                hour: "2-digit",
+                minute: "2-digit",
+              }
+            );
+
+          setMessages(
+            (current) => [
+              ...current,
+              {
+                role: "ai",
+                text: response,
+                time: aiTime,
+              },
+            ]
+          );
+
+          speak(
+            response,
+            language
+          );
+        }, 250);
+      },
+      [
+        columns,
+        data,
+        language,
+        onSearch,
+        onSort,
+        t,
+      ]
+    );
 
   useEffect(() => {
     if (!transcript) {
@@ -601,396 +1247,571 @@ export function YuktaiGridAI<
     handleUserInput(input);
   };
 
-  const suggestions = [
-    "highest salary",
-    "how many rows",
-    "average age",
-    "search sandeep",
-  ];
+  const suggestions =
+    language === "te-IN"
+      ? [
+          "అత్యధిక విలువ",
+          "ఎన్ని వరుసలు",
+          "సగటు విలువ",
+          "శోధించండి",
+        ]
+      : [
+          "highest value",
+          "how many rows",
+          "average value",
+          "search",
+        ];
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() =>
-          setChatOpen(
-            (value) => !value
-          )
-        }
-        aria-label={
-          chatOpen
-            ? "Close AI assistant"
-            : "Open AI assistant"
-        }
+  const panel = (
+    <div
+      style={{
+        width: embedded
+          ? "100%"
+          : 360,
+        maxWidth: embedded
+          ? "100%"
+          : "calc(100vw - 48px)",
+        height: embedded
+          ? 390
+          : 480,
+        maxHeight: "70vh",
+        background: colors.bg,
+        border: `1px solid ${colors.border}`,
+        borderRadius: embedded
+          ? 12
+          : 16,
+        boxShadow: embedded
+          ? "none"
+          : "0 20px 40px rgba(0,0,0,0.15)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* Header */}
+      <div
         style={{
-          position: "fixed",
-          bottom: 24,
-          right: 24,
-          zIndex: 9998,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
+          padding: "12px 14px",
           background: colors.accent,
           color: "#FFFFFF",
-          border: "none",
-          cursor: "pointer",
-          boxShadow:
-            "0 8px 20px rgba(16,185,129,0.3)",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
-          fontSize: 20,
+          gap: 10,
         }}
       >
-        {chatOpen ? "✕" : "🤖"}
-      </button>
-
-      {chatOpen && (
         <div
-          role="dialog"
-          aria-label="AI Grid Assistant"
           style={{
-            position: "fixed",
-            bottom: 90,
-            right: 24,
-            width: 360,
-            maxWidth:
-              "calc(100vw - 48px)",
-            height: 480,
-            maxHeight: "70vh",
-            background: colors.bg,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 16,
-            boxShadow:
-              "0 20px 40px rgba(0,0,0,0.15)",
-            zIndex: 9997,
+            width: 34,
+            height: 34,
+            borderRadius: 10,
             display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            fontFamily:
-              "system-ui, sans-serif",
+            alignItems: "center",
+            justifyContent: "center",
+            background:
+              "rgba(255,255,255,0.18)",
+            fontSize: 17,
+          }}
+        >
+          AI
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
           }}
         >
           <div
             style={{
-              padding: "14px 16px",
-              background: colors.accent,
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            {t.title}
+          </div>
+
+          <div
+            style={{
+              fontSize: 11,
+              opacity: 0.9,
+            }}
+          >
+            {t.subtitle}
+          </div>
+        </div>
+
+        {!embedded && (
+          <button
+            type="button"
+            onClick={() =>
+              setChatOpen(false)
+            }
+            aria-label={t.close}
+            title={t.close}
+            style={{
+              width: 32,
+              height: 32,
+              border: "none",
+              borderRadius: 8,
+              background:
+                "rgba(255,255,255,0.12)",
               color: "#FFFFFF",
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              justifyContent: "center",
+              cursor: "pointer",
             }}
           >
-            <span
-              style={{
-                fontSize: 22,
-              }}
-            >
-              🤖
-            </span>
+            <CloseIcon />
+          </button>
+        )}
+      </div>
 
+      {/* Input language */}
+      <div
+        style={{
+          padding: "8px 10px",
+          borderBottom: `1px solid ${colors.border}`,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: colors.surface,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11,
+            color: colors.muted,
+          }}
+        >
+          {t.inputLanguage}
+        </span>
+
+        <select
+          value={inputLanguage}
+          disabled
+          aria-label={t.inputLanguage}
+          style={{
+            padding: "5px 8px",
+            borderRadius: 7,
+            border: `1px solid ${colors.border}`,
+            background: colors.bg,
+            color: colors.text,
+            fontSize: 11,
+          }}
+        >
+          <option value="en-US">
+            {t.english}
+          </option>
+          <option value="te-IN">
+            {t.telugu}
+          </option>
+        </select>
+      </div>
+
+      {/* Messages */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: 10,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        {messages.map(
+          (message, index) => (
             <div
+              key={`${message.time}-${index}`}
               style={{
-                flex: 1,
+                alignSelf:
+                  message.role ===
+                  "user"
+                    ? "flex-end"
+                    : "flex-start",
+                maxWidth: "88%",
+                padding:
+                  "8px 11px",
+                borderRadius: 11,
+                background:
+                  message.role ===
+                  "user"
+                    ? colors.userMsg
+                    : colors.aiMsg,
+                color: colors.text,
+                fontSize: 13,
+                lineHeight: 1.5,
               }}
             >
-              <div
-                style={{
-                  fontWeight: 700,
-                  fontSize: 15,
-                }}
-              >
-                Grid AI Assistant
+              <div>
+                {message.text}
               </div>
 
               <div
                 style={{
-                  fontSize: 11,
-                  opacity: 0.9,
+                  marginTop: 3,
+                  fontSize: 10,
+                  opacity: 0.55,
+                  textAlign: "right",
                 }}
               >
-                {supported
-                  ? "Voice + Chat · Offline · Free"
-                  : "Chat only (voice not supported)"}
+                {message.time}
               </div>
             </div>
+          )
+        )}
 
-            <button
-              type="button"
-              onClick={() =>
-                setChatOpen(false)
-              }
-              aria-label="Close"
-              style={{
-                background:
-                  "transparent",
-                border: "none",
-                color: "#FFFFFF",
-                cursor: "pointer",
-                fontSize: 20,
-                padding: 4,
-              }}
-            >
-              ✕
-            </button>
-          </div>
-
+        {listening && (
           <div
             style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
+              alignSelf:
+                "flex-end",
+              padding:
+                "8px 11px",
+              borderRadius: 11,
+              background:
+                dark
+                  ? "#3F1D2E"
+                  : "#FEE2E2",
+              color:
+                dark
+                  ? "#FCA5A5"
+                  : "#991B1B",
+              fontSize: 13,
             }}
           >
-            {messages.map(
-              (message, index) => (
-                <div
-                  key={index}
-                  style={{
-                    alignSelf:
-                      message.role ===
-                      "user"
-                        ? "flex-end"
-                        : "flex-start",
-                    maxWidth: "85%",
-                    padding:
-                      "8px 12px",
-                    borderRadius: 12,
-                    background:
-                      message.role ===
-                      "user"
-                        ? colors.userMsg
-                        : colors.aiMsg,
-                    color:
-                      colors.text,
-                    fontSize: 13.5,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  <div>
-                    {message.text}
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 10,
-                      opacity: 0.6,
-                      marginTop: 4,
-                      textAlign:
-                        "right",
-                    }}
-                  >
-                    {message.time}
-                  </div>
-                </div>
-              )
-            )}
-
-            {listening && (
-              <div
-                style={{
-                  alignSelf:
-                    "flex-end",
-                  padding:
-                    "8px 12px",
-                  borderRadius: 12,
-                  background:
-                    "#FEE2E2",
-                  color:
-                    "#991B1B",
-                  fontSize: 13.5,
-                  fontStyle:
-                    "italic",
-                }}
-              >
-                🎤 Listening...
-              </div>
-            )}
-
-            <div
-              ref={messagesEndRef}
-            />
+            {t.listening}
           </div>
+        )}
 
-          <div
+        <div
+          ref={messagesEndRef}
+        />
+      </div>
+
+      {/* Suggestions */}
+      <div
+        style={{
+          padding:
+            "7px 10px",
+          borderTop: `1px solid ${colors.border}`,
+          display: "flex",
+          gap: 6,
+          overflowX: "auto",
+          flexShrink: 0,
+        }}
+      >
+        {suggestions.map(
+          (suggestion) => (
+            <button
+              type="button"
+              key={suggestion}
+              onClick={() =>
+                handleUserInput(
+                  suggestion
+                )
+              }
+              style={{
+                padding:
+                  "5px 9px",
+                borderRadius: 12,
+                border: `1px solid ${colors.border}`,
+                background:
+                  colors.surface,
+                color: colors.text,
+                fontSize: 10.5,
+                cursor:
+                  "pointer",
+                whiteSpace:
+                  "nowrap",
+              }}
+            >
+              {suggestion}
+            </button>
+          )
+        )}
+      </div>
+
+      {/* Composer */}
+      <div
+        style={{
+          padding: 9,
+          display: "flex",
+          gap: 6,
+          borderTop: `1px solid ${colors.border}`,
+          background:
+            colors.surface,
+        }}
+      >
+        <div
+          style={{
+            position:
+              "relative",
+            flex: 1,
+          }}
+        >
+          <SearchIcon />
+
+          <input
+            type="text"
+            value={input}
+            onChange={(event) =>
+              setInput(
+                event.target.value
+              )
+            }
+            onKeyDown={(event) => {
+              if (
+                event.key ===
+                "Enter"
+              ) {
+                handleSubmit();
+              }
+            }}
+            placeholder={
+              t.placeholder
+            }
+            aria-label={
+              t.ask
+            }
             style={{
+              width: "100%",
+              boxSizing:
+                "border-box",
               padding:
-                "6px 12px",
-              borderTop: `1px solid ${colors.border}`,
-              display: "flex",
-              gap: 6,
-              overflowX:
-                "auto",
+                "9px 10px 9px 34px",
+              borderRadius: 8,
+              border: `1px solid ${colors.border}`,
+              background:
+                colors.bg,
+              color:
+                colors.text,
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
+        </div>
+
+        {supported ? (
+          <button
+            type="button"
+            onClick={
+              listening
+                ? stop
+                : start
+            }
+            aria-label={
+              listening
+                ? t.listening
+                : t.inputLanguage
+            }
+            title={
+              listening
+                ? t.listening
+                : t.inputLanguage
+            }
+            style={{
+              width: 38,
+              height: 38,
+              border: "none",
+              borderRadius: 8,
+              background:
+                listening
+                  ? "#EF4444"
+                  : colors.accent,
+              color:
+                "#FFFFFF",
+              display:
+                "flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              cursor:
+                "pointer",
               flexShrink: 0,
             }}
           >
-            {suggestions.map(
-              (suggestion) => (
-                <button
-                  type="button"
-                  key={suggestion}
-                  onClick={() =>
-                    handleUserInput(
-                      suggestion
-                    )
-                  }
-                  style={{
-                    padding:
-                      "4px 10px",
-                    borderRadius:
-                      12,
-                    background:
-                      colors.surface,
-                    border: `1px solid ${colors.border}`,
-                    color:
-                      colors.text,
-                    fontSize: 11.5,
-                    cursor:
-                      "pointer",
-                    whiteSpace:
-                      "nowrap",
-                  }}
-                >
-                  {suggestion}
-                </button>
-              )
-            )}
-          </div>
+            <MicIcon />
+          </button>
+        ) : null}
 
-          <div
+        <button
+          type="button"
+          onClick={
+            handleSubmit
+          }
+          disabled={
+            !input.trim()
+          }
+          aria-label={
+            t.send
+          }
+          title={
+            t.send
+          }
+          style={{
+            width: 38,
+            height: 38,
+            border: "none",
+            borderRadius: 8,
+            background:
+              input.trim()
+                ? colors.accent
+                : colors.muted,
+            color:
+              "#FFFFFF",
+            display:
+              "flex",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
+            cursor:
+              input.trim()
+                ? "pointer"
+                : "not-allowed",
+            opacity:
+              input.trim()
+                ? 1
+                : 0.6,
+            flexShrink: 0,
+          }}
+        >
+          <SendIcon />
+        </button>
+      </div>
+    </div>
+  );
+
+  /*
+   * Embedded mode:
+   * AI stays inside YuktaiGrid.
+   */
+  if (embedded) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
+        {chatOpen ? (
+          panel
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              setChatOpen(true)
+            }
+            aria-label={t.open}
             style={{
-              padding: 10,
-              display: "flex",
-              gap: 6,
-              borderTop: `1px solid ${colors.border}`,
+              minHeight: 40,
+              padding:
+                "8px 13px",
+              borderRadius: 9,
+              border:
+                "1px solid #10B981",
               background:
-                colors.surface,
+                dark
+                  ? "#064E3B"
+                  : "#ECFDF5",
+              color:
+                dark
+                  ? "#A7F3D0"
+                  : "#047857",
+              display:
+                "inline-flex",
+              alignItems:
+                "center",
+              gap: 8,
+              cursor:
+                "pointer",
+              fontSize: 12,
+              fontWeight: 600,
             }}
           >
-            <input
-              type="text"
-              value={input}
-              onChange={(event) =>
-                setInput(
-                  event.target.value
-                )
-              }
-              onKeyDown={(event) => {
-                if (
-                  event.key ===
-                  "Enter"
-                ) {
-                  handleSubmit();
-                }
-              }}
-              placeholder="Ask or say a command..."
-              aria-label="Chat input"
-              style={{
-                flex: 1,
-                padding:
-                  "8px 12px",
-                border: `1px solid ${colors.border}`,
-                borderRadius: 8,
-                background:
-                  colors.bg,
-                color:
-                  colors.text,
-                fontSize: 13,
-                outline:
-                  "none",
-              }}
-            />
-
-            {supported && (
-              <button
-                type="button"
-                onClick={
-                  listening
-                    ? stop
-                    : start
-                }
-                aria-label={
-                  listening
-                    ? "Stop listening"
-                    : "Start voice input"
-                }
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background:
-                    listening
-                      ? "#EF4444"
-                      : colors.accent,
-                  color:
-                    "#FFFFFF",
-                  border:
-                    "none",
-                  cursor:
-                    "pointer",
-                  display:
-                    "flex",
-                  alignItems:
-                    "center",
-                  justifyContent:
-                    "center",
-                  fontSize: 16,
-                  flexShrink: 0,
-                }}
-              >
-                🎤
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={
-                handleSubmit
-              }
-              aria-label="Send"
-              disabled={
-                !input.trim()
-              }
-              style={{
-                padding:
-                  "0 14px",
-                background:
-                  input.trim()
-                    ? colors.accent
-                    : colors.muted,
-                color:
-                  "#FFFFFF",
-                border:
-                  "none",
-                borderRadius: 8,
-                cursor:
-                  input.trim()
-                    ? "pointer"
-                    : "not-allowed",
-                fontSize: 13,
-                fontWeight: 600,
-                flexShrink: 0,
-              }}
+            <span
+              aria-hidden="true"
             >
-              Send
-            </button>
-          </div>
+              AI
+            </span>
+
+            {t.ask}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  /*
+   * Floating mode:
+   * Preserved for standalone YuktaiGridAI usage.
+   */
+  return (
+    <>
+      {!chatOpen && (
+        <button
+          type="button"
+          onClick={() =>
+            setChatOpen(true)
+          }
+          aria-label={t.open}
+          title={t.title}
+          style={{
+            position:
+              "fixed",
+            bottom: 24,
+            right: 24,
+            zIndex: 9998,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            background:
+              colors.accent,
+            color:
+              "#FFFFFF",
+            border: "none",
+            cursor:
+              "pointer",
+            boxShadow:
+              "0 8px 20px rgba(16,185,129,0.3)",
+            display:
+              "flex",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
+            fontWeight: 700,
+            fontSize: 14,
+          }}
+        >
+          AI
+        </button>
+      )}
+
+      {chatOpen && (
+        <div
+          style={{
+            position:
+              "fixed",
+            bottom: 90,
+            right: 24,
+            zIndex: 9997,
+          }}
+        >
+          {panel}
         </div>
       )}
 
       <style>{`
-        @keyframes yuktai-pulse {
+        @keyframes yuktai-ai-pulse {
           0%, 100% {
             transform: scale(1);
-            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
           }
-
           50% {
-            transform: scale(1.1);
-            box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+            transform: scale(1.05);
           }
         }
       `}</style>

@@ -195,12 +195,7 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
     className?: string;
 }
 
-type YuktaiGridPropsWithHighlight<T extends Record<string, unknown>> = YuktaiGridProps<T> & {
-    highlightIds?: (string | number)[];
-    highlightColor?: string;
-    autoScrollToHighlight?: boolean;
-};
-declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, rowKey, view, mobileBreakpoint, theme, locale, search, selectable, selectedKeys, onSelectionChange, pagination, loading, highlightIds, highlightColor, autoScrollToHighlight, onRowClick, onSortChange, empty, className, }: YuktaiGridPropsWithHighlight<T>): react_jsx_runtime.JSX.Element;
+declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, rowKey, view, mobileBreakpoint, theme, locale, ai, search, selectable, selectedKeys, onSelectionChange, pagination, loading, highlightIds, highlightColor, autoScrollToHighlight, onRowClick, onSortChange, empty, className, }: YuktaiGridProps<T>): react_jsx_runtime.JSX.Element;
 
 interface UseGridOptions<T> {
     data: T[];
@@ -227,6 +222,7 @@ interface UseGridReturn<T> {
 }
 declare function useGrid<T extends Record<string, unknown>>(options: UseGridOptions<T>): UseGridReturn<T>;
 
+type Language = "en-US" | "te-IN";
 interface YuktaiGridAIProps<T> {
     data: T[];
     columns: {
@@ -237,9 +233,23 @@ interface YuktaiGridAIProps<T> {
     onSearch: (query: string) => void;
     onSort?: (key: string, dir: "asc" | "desc") => void;
     theme?: "light" | "dark";
-    language?: "en-US" | "en-IN" | "hi-IN" | "te-IN";
+    /**
+     * Language of AI UI and AI responses.
+     * Default: English.
+     */
+    language?: Language;
+    /**
+     * Language used by browser voice recognition.
+     * Default: English.
+     */
+    inputLanguage?: Language;
+    /**
+     * When true, AI is rendered inside the grid.
+     * When false, AI uses the floating assistant UI.
+     */
+    embedded?: boolean;
 }
-declare function YuktaiGridAI<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
+declare function YuktaiGridAI<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, inputLanguage, embedded, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
 
 declare global {
     interface Document {
