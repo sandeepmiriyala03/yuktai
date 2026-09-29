@@ -1,4 +1,19 @@
 "use client";
+
+import { useEffect } from "react";
+
+import {
+  countGrid,
+  getColumns,
+  getRow,
+  highlightRows,
+  openRow,
+  searchGrid,
+  selectRow,
+  type GridColumn,
+  type GridToolContext,
+} from "./gridTools";
+
 declare global {
   interface Document {
     modelContext?: {
@@ -17,25 +32,10 @@ declare global {
     };
   }
 }
-import { useEffect } from "react";
-import {
-  countGrid,
-  getColumns,
-  getRow,
-  highlightRows,
-  openRow,
-  searchGrid,
-  selectRow,
-  type GridToolContext,
-} from "./gridTools";
 
 export type YuktaiGridWebMCPProps<T> = {
   data: T[];
-  columns: {
-    key: string;
-    label: string;
-    type?: "text" | "number" | "date";
-  }[];
+  columns: GridColumn[];
   name?: string;
   onSelectRow?: (id: string) => void;
   onHighlightRows?: (ids: string[]) => void;
@@ -78,14 +78,18 @@ export default function YuktaiGridWebMCP<
           inputSchema: {
             type: "object",
             properties: {
-              query: { type: "string" },
+              query: {
+                type: "string",
+              },
             },
             required: ["query"],
           },
           execute: async ({ query }: { query: string }) =>
             searchGrid(context, query),
         },
-        { signal: controller.signal }
+        {
+          signal: controller.signal,
+        }
       );
 
       await modelContext.registerTool(
@@ -99,7 +103,9 @@ export default function YuktaiGridWebMCP<
           },
           execute: async () => countGrid(context),
         },
-        { signal: controller.signal }
+        {
+          signal: controller.signal,
+        }
       );
 
       await modelContext.registerTool(
@@ -113,7 +119,9 @@ export default function YuktaiGridWebMCP<
           },
           execute: async () => getColumns(context),
         },
-        { signal: controller.signal }
+        {
+          signal: controller.signal,
+        }
       );
 
       await modelContext.registerTool(
@@ -124,14 +132,18 @@ export default function YuktaiGridWebMCP<
           inputSchema: {
             type: "object",
             properties: {
-              id: { type: "string" },
+              id: {
+                type: "string",
+              },
             },
             required: ["id"],
           },
           execute: async ({ id }: { id: string }) =>
             getRow(context, id),
         },
-        { signal: controller.signal }
+        {
+          signal: controller.signal,
+        }
       );
 
       await modelContext.registerTool(
@@ -144,7 +156,9 @@ export default function YuktaiGridWebMCP<
             properties: {
               ids: {
                 type: "array",
-                items: { type: "string" },
+                items: {
+                  type: "string",
+                },
               },
             },
             required: ["ids"],
@@ -152,7 +166,9 @@ export default function YuktaiGridWebMCP<
           execute: async ({ ids }: { ids: string[] }) =>
             highlightRows(context, ids),
         },
-        { signal: controller.signal }
+        {
+          signal: controller.signal,
+        }
       );
 
       await modelContext.registerTool(
@@ -163,14 +179,18 @@ export default function YuktaiGridWebMCP<
           inputSchema: {
             type: "object",
             properties: {
-              id: { type: "string" },
+              id: {
+                type: "string",
+              },
             },
             required: ["id"],
           },
           execute: async ({ id }: { id: string }) =>
             selectRow(context, id),
         },
-        { signal: controller.signal }
+        {
+          signal: controller.signal,
+        }
       );
 
       await modelContext.registerTool(
@@ -181,14 +201,18 @@ export default function YuktaiGridWebMCP<
           inputSchema: {
             type: "object",
             properties: {
-              id: { type: "string" },
+              id: {
+                type: "string",
+              },
             },
             required: ["id"],
           },
           execute: async ({ id }: { id: string }) =>
             openRow(context, id),
         },
-        { signal: controller.signal }
+        {
+          signal: controller.signal,
+        }
       );
     };
 
