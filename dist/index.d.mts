@@ -170,6 +170,24 @@ interface GridTranslations {
     voice: string;
     ask: string;
 }
+interface YuktaiGridRuleContext<T = Record<string, unknown>> {
+    input: string;
+    data: T[];
+    columns: {
+        key: string;
+        label: string;
+    }[];
+}
+interface YuktaiGridRule<T = Record<string, unknown>> {
+    /** Application-defined rule name. */
+    name: string;
+    /** Phrases that activate this rule. */
+    phrases: string[];
+    /** Optional description for documentation/debugging. */
+    description?: string;
+    /** Application-specific execution logic. */
+    execute: (context: YuktaiGridRuleContext<T>) => Promise<string> | string;
+}
 interface YuktaiGridProps<T = Record<string, unknown>> {
     data: T[];
     columns: GridColumn<T>[];
@@ -213,6 +231,8 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
             message: string;
         }[];
     }) => void;
+    /** Application-defined content rules executed before generic Grid intent parsing. */
+    customRules?: YuktaiGridRule<T>[];
     /** Every result from the Agent (assistant or WebMCP), e.g. for logging. */
     onAgentResult?: (result: {
         success: boolean;
@@ -221,7 +241,7 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
     }) => void;
 }
 
-declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, rowKey, view, mobileBreakpoint, theme, locale, ai, search, selectable, selectedKeys, onSelectionChange, pagination, loading, highlightIds, highlightColor, autoScrollToHighlight, onRowClick, onSortChange, empty, className, inputLanguage, toolName, toolDescriptions, webmcp, onWebMCPStatusChange, onAgentResult, }: YuktaiGridProps<T>): react_jsx_runtime.JSX.Element;
+declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, rowKey, view, mobileBreakpoint, theme, locale, ai, search, selectable, selectedKeys, onSelectionChange, pagination, loading, highlightIds, highlightColor, autoScrollToHighlight, onRowClick, onSortChange, empty, className, inputLanguage, toolName, toolDescriptions, webmcp, onWebMCPStatusChange, onAgentResult, customRules, }: YuktaiGridProps<T>): react_jsx_runtime.JSX.Element;
 
 /**
  * gridTools — the ONE place where YuktaiGrid tools are defined.
@@ -518,8 +538,10 @@ type GridIntentContext = {
     }[];
     locale: GridToolLocale;
 };
-type YuktaiGridAgentProps = {
+type YuktaiGridAgentProps<T = Record<string, unknown>> = {
     tools: GridAgentTool[];
+    /** Current grid data available to application-defined rules. */
+    data?: T[];
     onResult?: (result: GridAgentResult) => void;
     onError?: (error: Error) => void;
     /** Language of the agent's own messages (default "en"). */
@@ -533,12 +555,14 @@ type YuktaiGridAgentProps = {
     rowKey?: string;
     /** Replace the built-in regex intent parser (e.g. with an on-device LLM). */
     parseIntent?: (text: string, context: GridIntentContext) => GridIntent | null;
+    /** Application-defined content rules executed before the generic intent parser. */
+    customRules?: YuktaiGridRule<T>[];
     /** How many steps to keep in history (default 20). */
     historyLimit?: number;
 };
 /** Built-in parser: exported so it can be tested and reused. */
 declare function parseGridIntent(text: string, context: GridIntentContext): GridIntent | null;
-declare function useYuktaiGridAgent({ tools, onResult, onError, locale, columns, rowKey, parseIntent, historyLimit, }: YuktaiGridAgentProps): {
+declare function useYuktaiGridAgent<T = Record<string, unknown>>({ tools, data, onResult, onError, locale, columns, rowKey, parseIntent, customRules, historyLimit, }: YuktaiGridAgentProps<T>): {
     loading: boolean;
     tools: GridAgentTool[];
     executeTool: (name: string, input?: Record<string, unknown>) => Promise<GridAgentResult<unknown>>;
