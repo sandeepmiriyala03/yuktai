@@ -1,6 +1,3 @@
-
-
-
 # @yuktishaalaa/yuktai
 
 > Universal Next.js plugin for accessibility, AI, and data. One install brings WCAG 2.2 auto-fix, in-browser RAG, an AI agent, code generation, and an accessible data grid with Agentic AI + WebMCP — zero API keys, zero cost, works offline.
@@ -57,71 +54,49 @@ Plus Grid Assistant capabilities, Grid Agent tools, WebMCP integration, 7 custom
 
 ## What's new
 
-v4.5.0 — Agentic AI + WebMCP for YuktaiGrid
-YuktaiGrid now exposes grid operations as reusable tools for Agentic AI and WebMCP.
+### v4.6.4 — YuktaiGrid Agentic AI + WebMCP
 
-Shared Grid Tools layer for agent and WebMCP execution
+YuktaiGrid now brings Grid UI, Grid AI Assistant, reusable Grid Tools, Agent execution, and WebMCP registration together.
 
-Search grid rows
+- Shared Grid Tools for Agent and WebMCP execution
 
-Count grid rows
+- Search grid rows
 
-Get grid columns
+- Count grid rows
 
-Get a row by ID
+- Get grid columns
 
-Highlight rows
+- Get a row by ID
 
-Select a row
+- Highlight rows
 
-Open a row
+- Select a row
 
-WebMCP tool registration through document.modelContext
+- Open a row
 
-useYuktaiGridAgent for programmatic agent tool execution
+- WebMCP registration through document.modelContext
 
-Designed around the flow: User → Agent → WebMCP → YuktaiGrid → Data
+- useYuktaiGridAgent for programmatic Grid tool execution
 
-v4.4.1
-Previous published YuktAI release.
+- Embedded Grid AI Assistant inside YuktaiGrid
 
----
+- English and Telugu AI UI
 
-**## What's new
+- English voice input by default with Telugu voice-input support
 
-### v4.1.2 — grid polish
+- language, inputLanguage, and embedded AI options
 
-- Search icon inside search input
+- Functional page-size switching such as 10 → 20 → 50 → 100
 
-- Empty-search-results state with "Clear search" action
+- Inline SVG Grid icons with no external icon dependency
 
-- Attractive pagination with page numbers and ellipsis
+- Public seven-icon package API
 
-- Better touch targets (36×36 min)
+Architecture: User → Agent → WebMCP → YuktaiGrid → Data
 
-- ARIA `aria-current="page"` on active page
+### v4.6.3
 
-### v4.1.0 — 7 custom SVG icons
-
-Zero external icon dependency. All icons: 24×24 viewBox, 2.5 stroke, `currentColor`, accessible.
-
-- `SearchIcon`, `SortUpIcon`, `SortDownIcon`
-
-- `ChevronLeftIcon`, `ChevronRightIcon`
-
-- `CheckIcon`, `CloseIcon`
-
-### v4.0.0 — YuktaiGrid ships
-
-Fully accessible data grid. 5 built-in themes. Mobile card view. Search + sort + pagination.
-
-### v3.0.0 — Voice + chat AI assistant
-
-Floating chat panel. Voice input via Web Speech API. TTS for AI replies. Zero LLM download.
-
-### v2.0.0 — Accessibility engine
-
-Auto-injects ARIA labels, `alt`, `role`, `tabindex`. MutationObserver watches for new elements.
+Previous published release before the v4.6.4 Grid fixes and polish.
 
 ---
 
@@ -155,7 +130,7 @@ Requirements: Node.js 18+, npm 8+, Next.js 13+.
 
 const nextConfig = {
 
-  transpilePackages: ["@yuktishaalaa/yuktai"],
+  transpilePackages: ["@yuktishaalaa/yuktai"],
 
 };
 
@@ -177,21 +152,21 @@ import { YuktAIWrapper } from "@yuktishaalaa/yuktai";
 
 export default function YuktaiClient({ children }: { children: ReactNode }) {
 
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => setMounted(true), []);
 
-  if (!mounted) return <>{children}</>;
+  if (!mounted) return <>{children}</>;
 
-  return (
+  return (
 
-    <YuktAIWrapper position="left">
+    <YuktAIWrapper position="left">
 
-      {children}
+      {children}
 
-    </YuktAIWrapper>
+    </YuktAIWrapper>
 
-  );
+  );
 
 }
 
@@ -205,23 +180,23 @@ import YuktaiClient from "@/components/YuktaiClient";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 
-  return (
+  return (
 
-    <html lang="en">
+    <html lang="en">
 
-      <body>
+      <body>
 
-        <YuktaiClient>
+        <YuktaiClient>
 
-          <main>{children}</main>
+          <main>{children}</main>
 
-        </YuktaiClient>
+        </YuktaiClient>
 
-      </body>
+      </body>
 
-    </html>
+    </html>
 
-  );
+  );
 
 }
 
@@ -267,27 +242,27 @@ import { wcagPlugin } from "@yuktishaalaa/yuktai";
 
 const report = wcagPlugin.applyFixes({
 
-  enabled:       true,
+  enabled:       true,
 
-  highContrast:  false,
+  highContrast:  false,
 
-  darkMode:      false,
+  darkMode:      false,
 
-  reduceMotion:  false,
+  reduceMotion:  false,
 
-  largeTargets:  false,
+  largeTargets:  false,
 
-  speechEnabled: false,
+  speechEnabled: false,
 
-  colorBlindMode:"none",
+  colorBlindMode:"none",
 
-  autoFix:       true,
+  autoFix:       true,
 
 });
 
-console.log(report.fixed);   // number of fixes applied
+console.log(report.fixed);   // number of fixes applied
 
-console.log(report.score);   // 0–100
+console.log(report.score);   // 0–100
 
 ```
 
@@ -307,67 +282,81 @@ import { YuktaiGrid } from "@yuktishaalaa/yuktai";
 
 const data = [
 
-  { id: 1, name: "Sandeep", role: "Developer", salary: 85000 },
+{ id: 1, name: "Sandeep", role: "Developer", salary: 85000 },
 
-  { id: 2, name: "Priya",   role: "Designer",  salary: 90000 },
+{ id: 2, name: "Priya", role: "Designer", salary: 90000 },
 
 ];
 
 export default function EmployeesPage() {
 
-  return (
+return (
 
-    <YuktaiGrid
+\<YuktaiGrid
 
-      data={data}
+  data={data}
 
-      columns={[
+  columns={[
 
-        { key: "name",   label: "Name",   sortable: true },
+    { key: "name", label: "Name", sortable: true },
 
-        { key: "role",   label: "Role" },
+    { key: "role", label: "Role" },
 
-        { key: "salary", label: "Salary", type: "number", align: "right" },
+    { key: "salary", label: "Salary", type: "number", align: "right" },
 
-      ]}
+  ]}
 
-      theme="default"                 // default | high-contrast | dark | color-blind | dyslexia
+  theme="default"                         // default | high-contrast | dark | color-blind | dyslexia
 
-      search={true}                   // real-time filtering
+  locale="en-US"                          // en-US | te-IN
 
-      view="auto"                     // auto (card on mobile) | table | card
+  search={true}                           // real-time filtering
 
-      pagination={{ pageSize: 10 }}   // built-in client pagination
+  ai={true}                               // embedded Grid AI Assistant
 
-    />
+  view="auto"                             // auto | table | card
 
-  );
+  pagination={{
+    pageSize: 20,
+    showSizeChanger: true,
+    sizeOptions: [10, 20, 50, 100],
+  }}
+
+/>
+
+);
 
 }
 
 ```
 
-### Grid features (12)
+### Grid features
 
-- Search bar with icon and "Clear" action
+- Search bar with inline SVG icon
 
-- Sort — click column header (asc → desc → cleared)
+- Sort — click a column header to toggle ascending / descending
 
-- Pagination with page numbers and ellipsis
+- Functional client-side pagination
 
-- Mobile card view (below 768px, no config needed)
+- Configurable page-size switching such as 10, 20, 50, 100
 
-- Loading, empty, and empty-search states
+- Mobile card view below the configured breakpoint
 
-- 5 WCAG themes with 3-line switcher
+- Loading and empty states
 
-- Row selection, custom render, `rowKey`
+- 5 WCAG themes
 
-- Keyboard navigation
+- Row selection, custom render, and rowKey
 
-- ARIA `role="grid"`, `aria-sort`, `aria-current`
+- Row highlighting and optional auto-scroll to highlighted rows
 
-- 44×44 touch targets
+- Embedded Grid AI Assistant
+
+- English and Telugu Grid UI
+
+- Inline SVG search, sort, selection, and pagination icons
+
+- No external icon dependency
 
 ### Handling large datasets (100K, 200K, 300K rows)
 
@@ -389,51 +378,51 @@ const TTL_MS = 60_000;
 
 async function fetchAll(): Promise<any[]> {
 
-  const now = Date.now();
+  const now = Date.now();
 
-  if (cachedData && now - cacheTime < TTL_MS) return cachedData;
+  if (cachedData && now - cacheTime < TTL_MS) return cachedData;
 
-  const res  = await fetch("https://your-api.com/employees", { cache: "no-store" });
+  const res  = await fetch("https://your-api.com/employees", { cache: "no-store" });
 
-  const json = await res.json();
+  const json = await res.json();
 
-  cachedData = Array.isArray(json) ? json : (json.employees ?? json.data ?? []);
+  cachedData = Array.isArray(json) ? json : (json.employees ?? json.data ?? []);
 
-  cacheTime  = now;
+  cacheTime  = now;
 
-  return cachedData;
+  return cachedData;
 
 }
 
 export async function GET(req: NextRequest) {
 
-  const p = req.nextUrl.searchParams;
+  const p = req.nextUrl.searchParams;
 
-  const page     = Math.max(1, parseInt(p.get("page")     || "1"));
+  const page     = Math.max(1, parseInt(p.get("page")     || "1"));
 
-  const pageSize = Math.max(1, parseInt(p.get("pageSize") || "5000"));
+  const pageSize = Math.max(1, parseInt(p.get("pageSize") || "5000"));
 
-  const search   = (p.get("search") || "").toLowerCase().trim();
+  const search   = (p.get("search") || "").toLowerCase().trim();
 
-  const all      = await fetchAll();
+  const all      = await fetchAll();
 
-  const filtered = search
+  const filtered = search
 
-    ? all.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(search)))
+    ? all.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(search)))
 
-    : all;
+    : all;
 
-  const total = filtered.length;
+  const total = filtered.length;
 
-  const rows  = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const rows  = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  return NextResponse.json({
+  return NextResponse.json({
 
-    rows,
+    rows,
 
-    pagination: { page, pageSize, totalRows: total, totalPages: Math.ceil(total / pageSize) },
+    pagination: { page, pageSize, totalRows: total, totalPages: Math.ceil(total / pageSize) },
 
-  });
+  });
 
 }
 
@@ -443,37 +432,132 @@ export async function GET(req: NextRequest) {
 
 ```tsx
 
-const [apiResp, setApiResp]     = useState<any>(null);
+const [apiResp, setApiResp]     = useState<any>(null);
 
-const [currentPage, setPage]    = useState(1);
+const [currentPage, setPage]    = useState(1);
 
 useEffect(() => {
 
-  fetch(`/api/employees?page=${currentPage}&pageSize=5000`)
+  fetch(`/api/employees?page=${currentPage}&pageSize=5000`)
 
-    .then(r => r.json())
+    .then(r => r.json())
 
-    .then(setApiResp);
+    .then(setApiResp);
 
 }, [currentPage]);
 
 <YuktaiGrid
 
-  data={apiResp?.rows ?? []}
+  data={apiResp?.rows ?? []}
 
-  columns={columns}
+  columns={columns}
 
-  search={false}         // disable — we handle search server-side
+  search={false}         // disable — we handle search server-side
 
-  pagination={false}     // disable — we handle pagination server-side
+  pagination={false}     // disable — we handle pagination server-side
 
-  loading={!apiResp}
+  loading={!apiResp}
 
 />
 
 ```
 
 Then render your own pagination bar backed by `apiResp.pagination`. This pattern works for 100K, 200K, 300K rows — the browser only ever holds 5,000 rows in memory.
+
+---
+
+---
+
+## Grid Agentic AI + WebMCP
+
+YuktaiGrid exposes reusable Grid operations so an Agent can work with grid data through a shared tool layer and WebMCP.
+
+### Grid tools
+
+```ts
+
+import {
+searchGrid,
+countGrid,
+getColumns,
+getRow,
+highlightRows,
+selectRow,
+openRow,
+} from "@yuktishaalaa/yuktai";
+
+```
+
+These operations form the common execution layer for programmatic Agent tools and WebMCP.
+
+### Agent execution
+
+```tsx
+
+import {
+useYuktaiGridAgent,
+type GridAgentTool,
+} from "@yuktishaalaa/yuktai";
+
+const tools: GridAgentTool[] = [
+{
+name: "search",
+description: "Search grid rows",
+execute: async ({ query }) => {
+return { query };
+},
+},
+];
+
+const { executeTool, loading } =
+useYuktaiGridAgent({ tools });
+
+```
+
+### WebMCP
+
+```tsx
+
+import {
+YuktaiGridWebMCP,
+} from "@yuktishaalaa/yuktai";
+
+<YuktaiGridWebMCP
+data={data}
+columns={columns}
+/>
+
+```
+
+WebMCP registration is invisible in the UI and uses document.modelContext when available.
+
+### Embedded Grid AI Assistant
+
+```tsx
+
+<YuktaiGrid
+data={data}
+columns={columns}
+locale="te-IN"
+ai={true}
+pagination={{
+pageSize: 20,
+showSizeChanger: true,
+sizeOptions: [10, 20, 50, 100],
+}}
+/>
+
+```
+
+Grid AI supports:
+
+- language="en-US" or language="te-IN" for AI UI and responses
+
+- inputLanguage="en-US" or inputLanguage="te-IN" for voice input
+
+- embedded mode for rendering AI inside the Grid
+
+- Local intent parsing for search, sort, count, highest, lowest, average, total, and lookup
 
 ---
 
@@ -561,63 +645,91 @@ No AI writes a single line. Pure template engineering. Same reusable-utility thi
 
 ---
 
-## Voice + Chat Assistant
+## Grid AI Assistant — Voice + Chat
 
-A floating 🤖 button bottom-right opens a chat panel. Voice in via Web Speech API. TTS out via SpeechSynthesis. Intent parsing runs locally — no LLM, no API.
+The Grid AI Assistant can run embedded inside YuktaiGrid or as a standalone component.
 
-Understands:
+Voice input uses the browser Web Speech API. AI responses can be spoken with SpeechSynthesis. Intent parsing runs locally for the supported Grid operations.
 
-- "highest salary" → analyzes visible grid rows
+Supports:
 
-- "how many employees" → counts
+- Search
 
-- "average age" → calculates
+- Sort
 
-- "who is Sandeep" → looks up
+- Count
 
-- "search for developer" → filters grid
+- Highest / maximum
 
-- "sort by salary descending" → sorts
+- Lowest / minimum
 
-Chrome + Edge give the best voice recognition. Firefox needs a flag. iOS Safari is limited.
+- Average
+
+- Total
+
+- Row lookup
+
+- English and Telugu AI UI
+
+- English voice input by default
+
+- Telugu voice input with inputLanguage="te-IN"
+
+Example:
+
+```tsx
+
+<YuktaiGridAI
+data={data}
+columns={columns}
+onSearch={handleSearch}
+onSort={handleSort}
+language="te-IN"
+inputLanguage="en-US"
+embedded
+/>
+
+```
+
+Voice recognition depends on browser Web Speech API support.
 
 ---
 
 ## Icon library
 
-7 custom SVG icons. Zero external dependency.
+7 custom SVG icons. Zero external dependency. All seven remain part of the public package API.
 
 ```tsx
 
 import {
 
-  SearchIcon,
+  SearchIcon,
 
-  SortUpIcon,
+  SortUpIcon,
 
-  SortDownIcon,
+  SortDownIcon,
 
-  ChevronLeftIcon,
+  ChevronLeftIcon,
 
-  ChevronRightIcon,
+  ChevronRightIcon,
 
-  CheckIcon,
+  CheckIcon,
 
-  CloseIcon,
+  CloseIcon,
 
 } from "@yuktishaalaa/yuktai";
 
-<SearchIcon        size={20} />
+<SearchIcon        size={20} />
 
-<SortUpIcon        size={20} color="#0D9488" />
+<SortUpIcon        size={20} color="#0D9488" />
 
-<CheckIcon         size={20} color="#10b981" label="Task complete" />
+<CheckIcon         size={20} color="#10b981" label="Task complete" />
 
-<CloseIcon         size={20} color="#dc2626" />
+<CloseIcon         size={20} color="#dc2626" />
 
-<ChevronLeftIcon   size={24} label="Previous" />
+<ChevronLeftIcon   size={24} label="Previous" />
 
-<ChevronRightIcon  size={24} label="Next" />
+<ChevronRightIcon  size={24} label="Next" />
 
 ```
 
@@ -657,31 +769,31 @@ import { wcagPlugin, A11yConfig } from "@yuktishaalaa/yuktai";
 
 const config: A11yConfig = {
 
-  enabled:             true,   // required
+  enabled:             true,   // required
 
-  highContrast:        false,
+  highContrast:        false,
 
-  darkMode:            false,
+  darkMode:            false,
 
-  reduceMotion:        false,
+  reduceMotion:        false,
 
-  largeTargets:        false,
+  largeTargets:        false,
 
-  speechEnabled:       false,
+  speechEnabled:       false,
 
-  colorBlindMode:      "none", // none | deuteranopia | protanopia | tritanopia | achromatopsia
+  colorBlindMode:      "none", // none | deuteranopia | protanopia | tritanopia | achromatopsia
 
-  autoFix:             true,
+  autoFix:             true,
 
-  showPreferencePanel: true,
+  showPreferencePanel: true,
 
-  showSkipLinks:       true,
+  showSkipLinks:       true,
 
-  showAuditBadge:      false,  // dev only (localhost)
+  showAuditBadge:      false,  // dev only (localhost)
 
-  fontSizeMultiplier:  1,
+  fontSizeMultiplier:  1,
 
-  timeoutWarning:      0,      // seconds (0 = off)
+  timeoutWarning:      0,      // seconds (0 = off)
 
 };
 
@@ -755,13 +867,11 @@ Chrome 90+ · Firefox 90+ · Safari 15+ · Edge 90+ · Samsung Internet 14+
 
 ## Roadmap
 
-Shipped: v4.1.2 (grid polish)  
+Shipped: v4.6.4 — YuktaiGrid Agentic AI + WebMCP integration, embedded Grid AI Assistant, English/Telugu Grid UI, functional page-size switching, and Grid icon polish.
 
-Next: v4.2.0 — Voice search inside `YuktaiGrid` (mic button + Web Speech API)  
+Next: expand Grid Agent tools and WebMCP capabilities.
 
-After that: v4.3.0 — AI Summary button, TTS row reader  
-
-Long term: v5.0.0 — WebLLM + WebMCP + multimodal
+Long term: richer browser-native AI and multimodal Grid experiences.
 
 ---
 

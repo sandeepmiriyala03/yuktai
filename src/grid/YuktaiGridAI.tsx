@@ -23,7 +23,11 @@ export interface YuktaiGridAIProps<T> {
     label: string;
     type?: "number" | "text" | "date";
   }[];
-  onSearch: (query: string) => void;
+  /**
+   * Used only when no `agent` is given (4.6.x behaviour).
+   * With an agent, every action goes through agent.ask() instead.
+   */
+  onSearch?: (query: string) => void;
   onSort?: (
     key: string,
     dir: "asc" | "desc"
@@ -47,6 +51,20 @@ export interface YuktaiGridAIProps<T> {
    * When false, AI uses the floating assistant UI.
    */
   embedded?: boolean;
+
+  /**
+   * The grid Agent (from useYuktaiGridAgent). When given, search / sort /
+   * filter / open / clear requests are sent to agent.ask() — the same
+   * pipeline WebMCP uses — and the Agent's result message is shown.
+   * Questions like "highest / average / total" are still answered here.
+   */
+  agent?: {
+    ask: (text: string) => Promise<{ success: boolean; message: string }>;
+    loading?: boolean;
+  };
+
+  /** Called when the person switches the voice input language. */
+  onInputLanguageChange?: (language: Language) => void;
 }
 
 const translations: Record<
@@ -61,6 +79,8 @@ const translations: Record<
     close: string;
     open: string;
     inputLanguage: string;
+    speakNow: string;
+    working: string;
     english: string;
     telugu: string;
 
@@ -107,6 +127,8 @@ const translations: Record<
     close: "Close",
     open: "Open AI assistant",
     inputLanguage: "Input language",
+    speakNow: "Speak your question",
+    working: "Working on it…",
     english: "English",
     telugu: "తెలుగు",
 
@@ -166,6 +188,8 @@ const translations: Record<
     close: "మూసివేయండి",
     open: "AI సహాయకుడిని తెరవండి",
     inputLanguage: "ఇన్‌పుట్ భాష",
+    speakNow: "మీ ప్రశ్న చెప్పండి",
+    working: "చేస్తున్నాను…",
     english: "English",
     telugu: "తెలుగు",
 
@@ -976,8 +1000,22 @@ export function YuktaiGridAI<
   language = "en-US",
   inputLanguage = "en-US",
   embedded = false,
+  agent,
+  onInputLanguageChange,
 }: YuktaiGridAIProps<T>) {
   const t = translations[language];
+
+  // Voice input language is now switchable (it used to be a disabled select).
+  // The prop sets the starting value and can still change it from outside.
+  const [voiceLanguage, setVoiceLanguage] =
+    useState<Language>(inputLanguage);
+
+  useEffect(() => {
+    setVoiceLanguage(inputLanguage);
+  }, [inputLanguage]);
+
+  const [thinking, setThinking] =
+    useState(false);
   const dark = theme === "dark";
 
   const [chatOpen, setChatOpen] =
@@ -999,7 +1037,7 @@ export function YuktaiGridAI<
     start,
     stop,
   } = useSpeechRecognition(
-    inputLanguage
+    voiceLanguage
   );
 
   const colors = useMemo(
@@ -1074,30 +1112,27 @@ export function YuktaiGridAI<
     );
   }, [messages]);
 
+  const timeNow = () =>
+    new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
   const handleUserInput =
     useCallback(
-      (text: string) => {
+      async (text: string) => {
         const value = text.trim();
 
         if (!value) {
           return;
         }
 
-        const userTime =
-          new Date().toLocaleTimeString(
-            [],
-            {
-              hour: "2-digit",
-              minute: "2-digit",
-            }
-          );
-
         setMessages((current) => [
           ...current,
           {
             role: "user",
             text: value,
-            time: userTime,
+            time: timeNow(),
           },
         ]);
 
@@ -1110,19 +1145,38 @@ export function YuktaiGridAI<
 
         let response = "";
 
-        if (intent.type === "search") {
+        if (intent.type === "question") {
+          // Analysis questions (count / highest / average / total) are
+          // answered from the data here — no tool needed.
+          response = answerQuestion(
+            intent.payload ?? value,
+            data,
+            columns,
+            language
+          );
+        } else if (agent) {
+          // Actions go through the Agent: same pipeline as WebMCP.
+          setThinking(true);
+          try {
+            const result = await agent.ask(value);
+            response = result.message;
+          } catch {
+            response = t.fallback;
+          } finally {
+            setThinking(false);
+          }
+        } else if (intent.type === "search") {
+          // 4.6.x behaviour (no agent)
           const query = String(
             intent.payload ?? value
           );
 
-          onSearch(query);
+          onSearch?.(query);
 
           response = t.searchStarted(
             query
           );
-        }
-
-        if (intent.type === "sort") {
+        } else if (intent.type === "sort") {
           const requestedKey =
             intent.payload?.key;
 
@@ -1130,33 +1184,23 @@ export function YuktaiGridAI<
             requestedKey
               ? columns.find(
                   (item) =>
-                    normalize(
-                      item.key
-                    ) ===
-                      normalize(
-                        requestedKey
-                      ) ||
-                    normalize(
-                      item.label
-                    ) ===
-                      normalize(
-                        requestedKey
-                      )
+                    normalize(item.key) ===
+                      normalize(requestedKey) ||
+                    normalize(item.label) ===
+                      normalize(requestedKey)
                 )
               : undefined;
 
           if (!column) {
-            column =
-              findReferencedColumn(
-                value,
-                columns
-              );
+            column = findReferencedColumn(
+              value,
+              columns
+            );
           }
 
           if (column && onSort) {
             const direction =
-              intent.payload?.dir ===
-              "desc"
+              intent.payload?.dir === "desc"
                 ? "desc"
                 : "asc";
 
@@ -1167,62 +1211,30 @@ export function YuktaiGridAI<
 
             response =
               direction === "asc"
-                ? t.sortedAscending(
-                    column.label
-                  )
-                : t.sortedDescending(
-                    column.label
-                  );
+                ? t.sortedAscending(column.label)
+                : t.sortedDescending(column.label);
           } else {
             response = t.noColumn;
           }
-        }
-
-        if (
-          intent.type === "question"
-        ) {
-          response =
-            answerQuestion(
-              intent.payload ??
-                value,
-              data,
-              columns,
-              language
-            );
         }
 
         if (!response) {
           response = t.fallback;
         }
 
-        window.setTimeout(() => {
-          const aiTime =
-            new Date().toLocaleTimeString(
-              [],
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-              }
-            );
+        setMessages((current) => [
+          ...current,
+          {
+            role: "ai",
+            text: response,
+            time: timeNow(),
+          },
+        ]);
 
-          setMessages(
-            (current) => [
-              ...current,
-              {
-                role: "ai",
-                text: response,
-                time: aiTime,
-              },
-            ]
-          );
-
-          speak(
-            response,
-            language
-          );
-        }, 250);
+        speak(response, language);
       },
       [
+        agent,
         columns,
         data,
         language,
@@ -1237,14 +1249,14 @@ export function YuktaiGridAI<
       return;
     }
 
-    handleUserInput(transcript);
+    void handleUserInput(transcript);
   }, [
     transcript,
     handleUserInput,
   ]);
 
   const handleSubmit = () => {
-    handleUserInput(input);
+    void handleUserInput(input);
   };
 
   const suggestions =
@@ -1388,8 +1400,14 @@ export function YuktaiGridAI<
         </span>
 
         <select
-          value={inputLanguage}
-          disabled
+          value={voiceLanguage}
+          onChange={(event) => {
+            const next =
+              event.target.value as Language;
+            setVoiceLanguage(next);
+            onInputLanguageChange?.(next);
+          }}
+          disabled={listening}
           aria-label={t.inputLanguage}
           style={{
             padding: "5px 8px",
@@ -1482,6 +1500,23 @@ export function YuktaiGridAI<
             }}
           >
             {t.listening}
+          </div>
+        )}
+
+        {(thinking || agent?.loading) && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              alignSelf: "flex-start",
+              padding: "8px 11px",
+              borderRadius: 11,
+              background: colors.aiMsg,
+              color: colors.muted,
+              fontSize: 13,
+            }}
+          >
+            {t.working}
           </div>
         )}
 
@@ -1604,12 +1639,12 @@ export function YuktaiGridAI<
             aria-label={
               listening
                 ? t.listening
-                : t.inputLanguage
+                : t.speakNow
             }
             title={
               listening
                 ? t.listening
-                : t.inputLanguage
+                : t.speakNow
             }
             style={{
               width: 38,

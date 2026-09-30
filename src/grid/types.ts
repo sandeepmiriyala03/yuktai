@@ -165,4 +165,39 @@ export interface YuktaiGridProps<
   ) => void
 
   className?: string
+
+  /* ───── v4.7.0 — one Agent pipeline for Assistant + WebMCP ───── */
+
+  /** Voice input language of the embedded assistant (default: follows `locale`). */
+  inputLanguage?: "en-US" | "te-IN"
+
+  /** Prefix for tool names, e.g. "ratnalabala_poems" → "ratnalabala_poems_search". */
+  toolName?: string
+
+  /** Agent-facing tool descriptions, e.g. { search: "Search Telugu poems by title or text." } */
+  toolDescriptions?: Partial<Record<
+    | "search" | "count" | "columns" | "get_row" | "highlight" | "select"
+    | "open" | "filter" | "clear_filters" | "sort" | "clear_sort",
+    string
+  >>
+
+  /**
+   * Expose the grid's tools to AI agents via WebMCP (document.modelContext).
+   * Uses exactly the same tools as the embedded assistant.
+   */
+  webmcp?: boolean
+
+  /** Real WebMCP registration status (state, registered tools, errors). */
+  onWebMCPStatusChange?: (status: {
+    state: "unsupported" | "registering" | "ready" | "partial" | "error"
+    registered: string[]
+    errors: { tool: string; message: string }[]
+  }) => void
+
+  /** Every result from the Agent (assistant or WebMCP), e.g. for logging. */
+  onAgentResult?: (result: {
+    success: boolean
+    message: string
+    tool?: string
+  }) => void
 }

@@ -45,20 +45,37 @@ export {
 export {
   default as YuktaiGridAgent,
   useYuktaiGridAgent,
+  // v4.7.0 — regex-first Telugu/English intent parser used by agent.ask()
+  parseGridIntent,
 } from "./grid/YuktaiGridAgent";
 
 // ─── Grid component types ────────────────────────────────────────────────────
+export type {
+  // v4.7.0
+  UseGridOptions,
+  UseGridReturn,
+} from "./grid/useGrid";
+
 export type {
   YuktaiGridAIProps,
 } from "./grid/YuktaiGridAI";
 
 export type {
   YuktaiGridWebMCPProps,
+  // v4.7.0 — real registration status
+  WebMCPStatus,
+  WebMCPState,
 } from "./grid/YuktaiGridWebMCP";
 
 export type {
   GridAgentTool,
   YuktaiGridAgentProps,
+  // v4.7.0
+  GridAgentResult,
+  GridAgentErrorCode,
+  GridAgentStep,
+  GridIntent,
+  GridIntentContext,
 } from "./grid/YuktaiGridAgent";
 
 // ─── Grid tools ──────────────────────────────────────────────────────────────
@@ -70,12 +87,34 @@ export {
   highlightRows,
   selectRow,
   openRow,
+
+  // v4.7.0 — filter / sort tools
+  filterGrid,
+  clearFilters,
+  sortGrid,
+  clearSort,
+
+  // v4.7.0 — one tool list for Agent + WebMCP, shared helpers
+  createGridTools,
+  getRowId,
+  applyGridFilters,
+  toGridToolColumns,
 } from "./grid/gridTools";
 
 export type {
   GridToolColumn,
   GridToolContext,
   GridToolResult,
+
+  // v4.7.0
+  GridTool,
+  GridToolId,
+  CreateGridToolsOptions,
+  GridToolErrorCode,
+  GridToolLocale,
+  GridToolFilter,
+  GridToolFilterOperator,
+  GridToolSort,
 } from "./grid/gridTools";
 
 // ─── Grid core types ─────────────────────────────────────────────────────────

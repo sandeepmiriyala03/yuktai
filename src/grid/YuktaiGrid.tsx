@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -12,6 +13,17 @@ import type {
 } from "./types";
 
 import YuktaiGridAI from "./YuktaiGridAI";
+import { useYuktaiGridAgent } from "./YuktaiGridAgent";
+import YuktaiGridWebMCP from "./YuktaiGridWebMCP";
+import {
+  applyGridFilters,
+  createGridTools,
+  toGridToolColumns,
+  type GridTool,
+  type GridToolFilter,
+  type GridToolResult,
+  type GridToolSort,
+} from "./gridTools";
 
 type Language = "en-US" | "te-IN";
 
@@ -34,6 +46,8 @@ const translations: Record<
     no: string;
     sortAscending: string;
     sortDescending: string;
+    filtersActive: (count: number) => string;
+    clearFilters: string;
   }
 > = {
   "en-US": {
@@ -53,6 +67,8 @@ const translations: Record<
     no: "No",
     sortAscending: "Sort ascending",
     sortDescending: "Sort descending",
+    filtersActive: (count) => `${count} filter(s) applied`,
+    clearFilters: "Clear filters",
   },
   "te-IN": {
     search: "శోధించండి...",
@@ -71,6 +87,8 @@ const translations: Record<
     no: "కాదు",
     sortAscending: "ఆరోహణ క్రమంలో అమర్చండి",
     sortDescending: "అవరోహణ క్రమంలో అమర్చండి",
+    filtersActive: (count) => `${count} ఫిల్టర్(లు) వేశారు`,
+    clearFilters: "ఫిల్టర్లు తీసేయండి",
   },
 };
 
@@ -265,6 +283,12 @@ export function YuktaiGrid<
   onSortChange,
   empty,
   className = "",
+  inputLanguage,
+  toolName = "yuktai_grid",
+  toolDescriptions,
+  webmcp = false,
+  onWebMCPStatusChange,
+  onAgentResult,
 }: YuktaiGridProps<T>) {
   const language: Language =
     locale === "te-IN" ? "te-IN" : "en-US";
@@ -301,6 +325,17 @@ export function YuktaiGrid<
   const [sortDirection, setSortDirection] =
     useState<"asc" | "desc">("asc");
   const [isMobile, setIsMobile] = useState(false);
+
+  // Filters set by the Agent (filter tool) — applied to rows below
+  const [filters, setFilters] = useState<GridToolFilter[]>([]);
+
+  // Rows highlighted by the Agent (search / highlight tools)
+  const [agentHighlight, setAgentHighlight] = useState<string[]>([]);
+
+  const toolColumns = useMemo(
+    () => toGridToolColumns(columns.map((c) => ({ key: String(c.key), label: c.label, type: c.type }))),
+    [columns]
+  );
 
   useEffect(() => {
     setPageSize(configuredPageSize);
@@ -346,6 +381,10 @@ export function YuktaiGrid<
             .includes(query)
         )
       );
+    }
+
+    if (filters.length) {
+      result = applyGridFilters(result, toolColumns, filters);
     }
 
     if (sortKey) {
@@ -394,6 +433,8 @@ export function YuktaiGrid<
     data,
     columns,
     searchText,
+    filters,
+    toolColumns,
     sortKey,
     sortDirection,
     locale,
@@ -414,13 +455,18 @@ export function YuktaiGrid<
     }
   }, [page, totalPages]);
 
+  const activeHighlightIds = useMemo(() => {
+    const all = [...highlightIds.map(String), ...agentHighlight];
+    return Array.from(new Set(all));
+  }, [highlightIds, agentHighlight]);
+
   useEffect(() => {
     if (!autoScrollToHighlight) {
       return;
     }
 
     const firstHighlight =
-      highlightIds[0];
+      activeHighlightIds[0];
 
     if (
       firstHighlight === undefined ||
@@ -448,7 +494,7 @@ export function YuktaiGrid<
       block: "center",
     });
   }, [
-    highlightIds,
+    activeHighlightIds,
     autoScrollToHighlight,
     page,
   ]);
@@ -487,7 +533,7 @@ export function YuktaiGrid<
     );
 
   const isHighlighted = (id: string) =>
-    highlightIds.some(
+    activeHighlightIds.some(
       (key) => String(key) === id
     );
 
@@ -563,6 +609,119 @@ export function YuktaiGrid<
       key: String(column.key),
       direction,
     });
+  };
+
+  /* ───── One tool list for the Assistant AND WebMCP ───── */
+
+  const toolLocale = language === "te-IN" ? "te" : "en";
+
+  const applySortFromTool = useCallback(
+    (sort: GridToolSort | null) => {
+      if (sort) {
+        setSortKey(sort.key);
+        setSortDirection(sort.direction);
+      } else {
+        setSortKey(undefined);
+        setSortDirection("asc");
+      }
+      setPage(1);
+      onSortChange?.(sort);
+    },
+    [onSortChange]
+  );
+
+  const applyFiltersFromTool = useCallback((next: GridToolFilter[]) => {
+    setFilters(next);
+    setPage(1);
+  }, []);
+
+  const highlightFromTool = useCallback(
+    (ids: string[]) => {
+      setAgentHighlight(ids);
+      // Jump to the page that contains the first highlighted row
+      if (paginationEnabled && ids.length) {
+        const index = rows.findIndex((row) => String(row[rowKey as keyof T] ?? "") === ids[0]);
+        if (index >= 0) setPage(Math.floor(index / pageSize) + 1);
+      }
+    },
+    [paginationEnabled, rows, rowKey, pageSize]
+  );
+
+  const tools = useMemo<GridTool[]>(
+    () =>
+      createGridTools(
+        {
+          data,
+          columns: toolColumns,
+          rowKey: String(rowKey),
+          locale: toolLocale,
+          filters,
+          onHighlightRows: highlightFromTool,
+          onFiltersChange: applyFiltersFromTool,
+          onSortChange: applySortFromTool,
+          // Only offered when the app can actually do them
+          onOpenRow: onRowClick
+            ? (id) => {
+                const index = rows.findIndex((row) => String(row[rowKey as keyof T] ?? "") === id);
+                const row = index >= 0 ? rows[index] : data.find((r) => String(r[rowKey as keyof T] ?? "") === id);
+                if (row) onRowClick(row, Math.max(index, 0));
+              }
+            : undefined,
+          onSelectRow:
+            selectable && onSelectionChange
+              ? (id) => {
+                  if (!selectedKeys.some((key) => String(key) === id)) {
+                    onSelectionChange([...selectedKeys.map(String), id]);
+                  }
+                }
+              : undefined,
+        },
+        { name: toolName, descriptions: toolDescriptions }
+      ),
+    [
+      data,
+      toolColumns,
+      rowKey,
+      toolLocale,
+      filters,
+      highlightFromTool,
+      applyFiltersFromTool,
+      applySortFromTool,
+      onRowClick,
+      rows,
+      selectable,
+      onSelectionChange,
+      selectedKeys,
+      toolName,
+      toolDescriptions,
+    ]
+  );
+
+  const agent = useYuktaiGridAgent({
+    tools,
+    locale: toolLocale,
+    columns: toolColumns,
+    rowKey: String(rowKey),
+    onResult: onAgentResult,
+  });
+
+  // WebMCP calls go through the Agent too, so history / loading / onAgentResult
+  // cover assistant AND external agents. Names/schemas are unchanged, so data
+  // changes never cause re-registration.
+  const webmcpTools = useMemo<GridTool[]>(
+    () =>
+      tools.map((tool) => ({
+        ...tool,
+        // executeTool never returns NOT_UNDERSTOOD (only ask() does), so this is a GridToolResult
+        execute: (input: Record<string, unknown>) =>
+          agent.executeTool(tool.name, input) as Promise<GridToolResult>,
+      })),
+    [tools, agent.executeTool]
+  );
+
+  const clearAgentFilters = () => {
+    setFilters([]);
+    setPage(1);
   };
 
   const renderValue = (
@@ -685,6 +844,13 @@ export function YuktaiGrid<
         className={className}
         style={containerStyle}
       >
+        {/* keep tools registered while loading, so agents don't see them flicker */}
+        {webmcp && (
+          <YuktaiGridWebMCP<T>
+            tools={webmcpTools}
+            onStatusChange={onWebMCPStatusChange}
+          />
+        )}
         <div
           style={{
             padding: 32,
@@ -717,7 +883,14 @@ export function YuktaiGrid<
       className={className}
       style={containerStyle}
     >
-      {(search || aiEnabled) && (
+      {webmcp && (
+        <YuktaiGridWebMCP<T>
+          tools={webmcpTools}
+          onStatusChange={onWebMCPStatusChange}
+        />
+      )}
+
+      {(search || aiEnabled || filters.length > 0) && (
         <div style={headerStyle}>
           {search && (
             <div
@@ -780,6 +953,25 @@ export function YuktaiGrid<
             </div>
           )}
 
+          {filters.length > 0 && (
+            <button
+              type="button"
+              onClick={clearAgentFilters}
+              title={t.clearFilters}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                border: dark ? "1px solid #475569" : "1px solid #cbd5e1",
+                background: dark ? "#1e293b" : "#f1f5f9",
+                color: "inherit",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              {t.filtersActive(filters.length)} ✕
+            </button>
+          )}
+
           <div
             style={{
               marginLeft: "auto",
@@ -806,7 +998,8 @@ export function YuktaiGrid<
                   : "light"
               }
               language={language}
-              inputLanguage="en-US"
+              inputLanguage={inputLanguage ?? language}
+              agent={{ ask: agent.ask, loading: agent.loading }}
               embedded
             />
           )}

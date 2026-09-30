@@ -193,25 +193,178 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
     onRowClick?: (row: T, index: number) => void;
     onSortChange?: (sort: SortConfig | null) => void;
     className?: string;
+    /** Voice input language of the embedded assistant (default: follows `locale`). */
+    inputLanguage?: "en-US" | "te-IN";
+    /** Prefix for tool names, e.g. "ratnalabala_poems" → "ratnalabala_poems_search". */
+    toolName?: string;
+    /** Agent-facing tool descriptions, e.g. { search: "Search Telugu poems by title or text." } */
+    toolDescriptions?: Partial<Record<"search" | "count" | "columns" | "get_row" | "highlight" | "select" | "open" | "filter" | "clear_filters" | "sort" | "clear_sort", string>>;
+    /**
+     * Expose the grid's tools to AI agents via WebMCP (document.modelContext).
+     * Uses exactly the same tools as the embedded assistant.
+     */
+    webmcp?: boolean;
+    /** Real WebMCP registration status (state, registered tools, errors). */
+    onWebMCPStatusChange?: (status: {
+        state: "unsupported" | "registering" | "ready" | "partial" | "error";
+        registered: string[];
+        errors: {
+            tool: string;
+            message: string;
+        }[];
+    }) => void;
+    /** Every result from the Agent (assistant or WebMCP), e.g. for logging. */
+    onAgentResult?: (result: {
+        success: boolean;
+        message: string;
+        tool?: string;
+    }) => void;
 }
 
-declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, rowKey, view, mobileBreakpoint, theme, locale, ai, search, selectable, selectedKeys, onSelectionChange, pagination, loading, highlightIds, highlightColor, autoScrollToHighlight, onRowClick, onSortChange, empty, className, }: YuktaiGridProps<T>): react_jsx_runtime.JSX.Element;
+declare function YuktaiGrid<T extends Record<string, unknown>>({ data, columns, rowKey, view, mobileBreakpoint, theme, locale, ai, search, selectable, selectedKeys, onSelectionChange, pagination, loading, highlightIds, highlightColor, autoScrollToHighlight, onRowClick, onSortChange, empty, className, inputLanguage, toolName, toolDescriptions, webmcp, onWebMCPStatusChange, onAgentResult, }: YuktaiGridProps<T>): react_jsx_runtime.JSX.Element;
+
+/**
+ * gridTools — the ONE place where YuktaiGrid tools are defined.
+ *
+ * Both the in-page Agent (useYuktaiGridAgent) and WebMCP (YuktaiGridWebMCP)
+ * should get their tools from `createGridTools()`, so the list an agent sees
+ * can never drift from the list the UI shows.
+ *
+ * Rules every tool follows:
+ *  1. One row-ID strategy: `getRowId(row, context.rowKey)` everywhere.
+ *     `rowKey` must match YuktaiGrid's `rowKey` prop (default "id").
+ *  2. One result shape: { success, message, data?, error?: { code } }.
+ *  3. Never claim success for something that didn't happen:
+ *     missing callback → NOT_SUPPORTED, unknown row → NOT_FOUND.
+ *  4. Never throw: tool execution is wrapped, errors become INTERNAL results.
+ *
+ * Backward compatible with 4.6.x: the existing exports keep their names and
+ * parameters; results only gain an optional `error` field.
+ */
+type GridToolColumn = {
+    key: string;
+    label: string;
+    type?: "text" | "number" | "date";
+};
+type GridToolErrorCode = "NOT_FOUND" | "NOT_SUPPORTED" | "INVALID_INPUT" | "INTERNAL";
+type GridToolFilterOperator = "contains" | "equals" | "startsWith" | "endsWith" | "greaterThan" | "lessThan" | "between";
+type GridToolFilter = {
+    key: string;
+    operator: GridToolFilterOperator;
+    value: string | number | [number, number];
+};
+type GridToolSort = {
+    key: string;
+    direction: "asc" | "desc";
+};
+/** Language of `message` (shown to people). Agent descriptions stay English. */
+type GridToolLocale = "en" | "te";
+type GridToolContext<T> = {
+    data: T[];
+    columns: GridToolColumn[];
+    /** Field used as the row ID by every tool (default "id"). Match YuktaiGrid's rowKey. */
+    rowKey?: string;
+    /** Language for result messages (default "en"). */
+    locale?: GridToolLocale;
+    /** Filters currently applied, so a new filter can be merged in. */
+    filters?: GridToolFilter[];
+    onSelectRow?: (id: string) => void;
+    onHighlightRows?: (ids: string[]) => void;
+    onOpenRow?: (id: string) => void;
+    onFiltersChange?: (filters: GridToolFilter[]) => void;
+    onSortChange?: (sort: GridToolSort | null) => void;
+};
+type GridToolResult<T = unknown> = {
+    success: boolean;
+    message: string;
+    data?: T;
+    error?: {
+        code: GridToolErrorCode;
+    };
+};
+/** A tool ready for the Agent and for WebMCP `registerTool`. */
+type GridTool = {
+    name: string;
+    title: string;
+    /** For AI agents (English works best for tool selection). Never shown in the UI. */
+    description: string;
+    /** Short label for the UI, in the grid's locale. */
+    label: string;
+    inputSchema: Record<string, unknown>;
+    execute: (input: Record<string, unknown>) => Promise<GridToolResult>;
+};
+type CreateGridToolsOptions = {
+    /** Tool name prefix, e.g. "ratnalabala_poems" → "ratnalabala_poems_search". */
+    name?: string;
+    /** Override agent descriptions per tool, keyed by the short tool id ("search", "open", …). */
+    descriptions?: Partial<Record<GridToolId, string>>;
+};
+type GridToolId = "search" | "count" | "columns" | "get_row" | "highlight" | "select" | "open" | "filter" | "clear_filters" | "sort" | "clear_sort";
+/** The single row-ID rule used by every tool. */
+declare function getRowId(row: unknown, rowKey?: string): string;
+/**
+ * Applies filters to rows — exported so YuktaiGrid filters its rows with
+ * exactly the same rules the filter tool uses to count matches.
+ */
+declare function applyGridFilters<T>(data: T[], columns: GridToolColumn[], filters: GridToolFilter[]): T[];
+/** Maps grid columns (any type) to tool columns (text / number / date). */
+declare function toGridToolColumns(columns: {
+    key: string;
+    label: string;
+    type?: string;
+}[]): GridToolColumn[];
+declare function searchGrid<T extends Record<string, unknown>>(context: GridToolContext<T>, query: string): GridToolResult<T[]>;
+declare function countGrid<T>(context: GridToolContext<T>): GridToolResult<number>;
+declare function getColumns<T>(context: GridToolContext<T>): GridToolResult<GridToolColumn[]>;
+declare function getRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<T>;
+declare function highlightRows<T extends Record<string, unknown>>(context: GridToolContext<T>, ids: string[]): GridToolResult<string[]>;
+declare function selectRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<string>;
+declare function openRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<string>;
+declare function filterGrid<T extends Record<string, unknown>>(context: GridToolContext<T>, filter: GridToolFilter): GridToolResult<{
+    filters: GridToolFilter[];
+    count: number;
+}>;
+declare function clearFilters<T>(context: GridToolContext<T>): GridToolResult<GridToolFilter[]>;
+declare function sortGrid<T>(context: GridToolContext<T>, key: string, direction?: "asc" | "desc"): GridToolResult<GridToolSort>;
+declare function clearSort<T>(context: GridToolContext<T>): GridToolResult<null>;
+/**
+ * Builds the tool list used by BOTH the Agent and WebMCP.
+ * Only tools the grid can actually perform are included — e.g. "open" is
+ * left out when no onOpenRow callback is given — so agents never see a tool
+ * that would just return NOT_SUPPORTED.
+ */
+declare function createGridTools<T extends Record<string, unknown>>(context: GridToolContext<T>, options?: CreateGridToolsOptions): GridTool[];
 
 interface UseGridOptions<T> {
     data: T[];
     columns: GridColumn<T>[];
     pagination?: boolean | PaginationConfig;
     mobileBreakpoint?: number;
+    /** Locale for text sorting, e.g. "te-IN" (default: browser locale) */
+    locale?: string;
+    /** Starting filters (optional) */
+    initialFilters?: GridToolFilter[];
 }
 interface UseGridReturn<T> {
     displayedData: T[];
+    /** All matching rows (search + filters + sort), before pagination */
+    rows: T[];
     totalCount: number;
     filteredCount: number;
     sort: SortConfig | null;
     toggleSort: (key: string) => void;
+    /** Set sort directly (null clears it) */
+    setSort: (sort: SortConfig | null) => void;
     clearSort: () => void;
     searchQuery: string;
     setSearchQuery: (q: string) => void;
+    filters: GridToolFilter[];
+    setFilters: (filters: GridToolFilter[]) => void;
+    /** Add or replace the filter for one column */
+    setFilter: (filter: GridToolFilter) => void;
+    /** Remove the filter for one column */
+    removeFilter: (key: string) => void;
+    clearFilters: () => void;
     page: number;
     pageSize: number;
     totalPages: number;
@@ -230,7 +383,11 @@ interface YuktaiGridAIProps<T> {
         label: string;
         type?: "number" | "text" | "date";
     }[];
-    onSearch: (query: string) => void;
+    /**
+     * Used only when no `agent` is given (4.6.x behaviour).
+     * With an agent, every action goes through agent.ask() instead.
+     */
+    onSearch?: (query: string) => void;
     onSort?: (key: string, dir: "asc" | "desc") => void;
     theme?: "light" | "dark";
     /**
@@ -248,79 +405,149 @@ interface YuktaiGridAIProps<T> {
      * When false, AI uses the floating assistant UI.
      */
     embedded?: boolean;
+    /**
+     * The grid Agent (from useYuktaiGridAgent). When given, search / sort /
+     * filter / open / clear requests are sent to agent.ask() — the same
+     * pipeline WebMCP uses — and the Agent's result message is shown.
+     * Questions like "highest / average / total" are still answered here.
+     */
+    agent?: {
+        ask: (text: string) => Promise<{
+            success: boolean;
+            message: string;
+        }>;
+        loading?: boolean;
+    };
+    /** Called when the person switches the voice input language. */
+    onInputLanguageChange?: (language: Language) => void;
 }
-declare function YuktaiGridAI<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, inputLanguage, embedded, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
+declare function YuktaiGridAI<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, inputLanguage, embedded, agent, onInputLanguageChange, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
 
+type ModelContextTool = {
+    name: string;
+    title: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+    execute: (input: any) => Promise<unknown> | unknown;
+};
 declare global {
     interface Document {
         modelContext?: {
-            registerTool: (tool: {
-                name: string;
-                title: string;
-                description: string;
-                inputSchema: Record<string, unknown>;
-                execute: (input: any) => Promise<unknown> | unknown;
-            }, options?: {
+            registerTool: (tool: ModelContextTool, options?: {
                 signal?: AbortSignal;
             }) => Promise<void>;
         };
     }
 }
+type WebMCPState = "unsupported" | "registering" | "ready" | "partial" | "error";
+type WebMCPStatus = {
+    state: WebMCPState;
+    /** Tools that the browser actually accepted */
+    registered: string[];
+    errors: {
+        tool: string;
+        message: string;
+    }[];
+};
 type WebMCPColumn = {
     key: string;
     label: string;
     type?: "text" | "number" | "date";
 };
 type YuktaiGridWebMCPProps<T> = {
-    data: T[];
-    columns: WebMCPColumn[];
-    name?: string;
+    /**
+     * Ready-made tools (YuktaiGrid passes its own list here). When given,
+     * data/columns/callbacks below are not needed.
+     */
+    tools?: GridTool[];
+    data?: T[];
+    columns?: WebMCPColumn[];
+    rowKey?: string;
+    locale?: GridToolLocale;
     onSelectRow?: (id: string) => void;
     onHighlightRows?: (ids: string[]) => void;
     onOpenRow?: (id: string) => void;
+    /** Tool name prefix (default "yuktai_grid") */
+    name?: string;
+    /** Agent-facing descriptions per tool, e.g. { search: "Search Telugu poems…" } */
+    descriptions?: CreateGridToolsOptions["descriptions"];
+    /** Called whenever the registration status changes */
+    onStatusChange?: (status: WebMCPStatus) => void;
 };
-declare function YuktaiGridWebMCP<T extends Record<string, unknown>>({ data, columns, name, onSelectRow, onHighlightRows, onOpenRow, }: YuktaiGridWebMCPProps<T>): null;
+declare function YuktaiGridWebMCP<T extends Record<string, unknown>>({ tools: toolsProp, data, columns, rowKey, locale, onSelectRow, onHighlightRows, onOpenRow, name, descriptions, onStatusChange, }: YuktaiGridWebMCPProps<T>): null;
 
 type GridAgentTool = {
     name: string;
     description: string;
+    /** Optional UI label (e.g. Telugu). createGridTools() provides it. */
+    label?: string;
+    /** Optional JSON schema; its `required` list is checked before running. */
+    inputSchema?: Record<string, unknown>;
     execute: (input: Record<string, unknown>) => Promise<unknown> | unknown;
+};
+type GridAgentErrorCode = GridToolErrorCode | "NOT_UNDERSTOOD";
+type GridAgentResult<T = unknown> = Omit<GridToolResult<T>, "error"> & {
+    error?: {
+        code: GridAgentErrorCode;
+    };
+    /** Full name of the tool that produced this result */
+    tool?: string;
+};
+type GridAgentStep = {
+    id: number;
+    tool: string;
+    input: Record<string, unknown>;
+    result: GridAgentResult;
+    source: "tool" | "ask";
+    at: number;
+};
+type GridIntent = {
+    kind: "tool";
+    tool: string;
+    input: Record<string, unknown>;
+}
+/** "open <something>": search for it, then open the first match */
+ | {
+    kind: "open";
+    text: string;
+};
+type GridIntentContext = {
+    columns: {
+        key: string;
+        label: string;
+    }[];
+    locale: GridToolLocale;
 };
 type YuktaiGridAgentProps = {
     tools: GridAgentTool[];
-    onResult?: (result: unknown) => void;
+    onResult?: (result: GridAgentResult) => void;
     onError?: (error: Error) => void;
+    /** Language of the agent's own messages (default "en"). */
+    locale?: GridToolLocale;
+    /** Columns, so ask() can understand "sort by <column>". */
+    columns?: {
+        key: string;
+        label: string;
+    }[];
+    /** Row ID field — must match the grid's rowKey (default "id"). */
+    rowKey?: string;
+    /** Replace the built-in regex intent parser (e.g. with an on-device LLM). */
+    parseIntent?: (text: string, context: GridIntentContext) => GridIntent | null;
+    /** How many steps to keep in history (default 20). */
+    historyLimit?: number;
 };
-declare function useYuktaiGridAgent({ tools, onResult, onError, }: YuktaiGridAgentProps): {
+/** Built-in parser: exported so it can be tested and reused. */
+declare function parseGridIntent(text: string, context: GridIntentContext): GridIntent | null;
+declare function useYuktaiGridAgent({ tools, onResult, onError, locale, columns, rowKey, parseIntent, historyLimit, }: YuktaiGridAgentProps): {
     loading: boolean;
     tools: GridAgentTool[];
-    executeTool: (name: string, input?: Record<string, unknown>) => Promise<unknown>;
+    executeTool: (name: string, input?: Record<string, unknown>) => Promise<GridAgentResult<unknown>>;
+    ask: (text: string) => Promise<GridAgentResult>;
+    lastResult: GridAgentResult<unknown> | null;
+    lastError: Error | null;
+    history: GridAgentStep[];
+    clearHistory: () => void;
 };
-
-type GridToolColumn = {
-    key: string;
-    label: string;
-    type?: "text" | "number" | "date";
-};
-type GridToolContext<T> = {
-    data: T[];
-    columns: GridToolColumn[];
-    onSelectRow?: (id: string) => void;
-    onHighlightRows?: (ids: string[]) => void;
-    onOpenRow?: (id: string) => void;
-};
-type GridToolResult<T = unknown> = {
-    success: boolean;
-    message: string;
-    data?: T;
-};
-declare function searchGrid<T extends Record<string, unknown>>(context: GridToolContext<T>, query: string): GridToolResult<T[]>;
-declare function countGrid<T>(context: GridToolContext<T>): GridToolResult<number>;
-declare function getColumns<T>(context: GridToolContext<T>): GridToolResult<GridToolColumn[]>;
-declare function getRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<T>;
-declare function highlightRows<T extends Record<string, unknown>>(context: GridToolContext<T>, ids: string[]): GridToolResult<string[]>;
-declare function selectRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<string>;
-declare function openRow<T extends Record<string, unknown>>(context: GridToolContext<T>, id: string): GridToolResult<string>;
 
 interface IconProps extends React.SVGAttributes<SVGSVGElement> {
     /** Size in pixels — applied to both width and height. Default: 20 */
@@ -387,4 +614,4 @@ declare const YuktAI: {
     scan(): A11yReport;
 };
 
-export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type FilterConfig, type FilterOperator, type GridAgentTool, type GridColumn, type GridLocale, type GridTheme, type GridToolColumn, type GridToolContext, type GridToolResult, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type ViewMode, type VoiceFeatures, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, YuktaiGridAI, type YuktaiGridAIProps, useYuktaiGridAgent as YuktaiGridAgent, type YuktaiGridAgentProps, type YuktaiGridProps, YuktaiGridWebMCP, type YuktaiGridWebMCPProps, aiPlugin, countGrid, YuktAIWrapper as default, getColumns, getRow, highlightRows, openRow, searchGrid, selectRow, useGrid, useYuktaiGridAgent, voicePlugin, wcagPlugin as wcag, wcagPlugin };
+export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type CreateGridToolsOptions, type FilterConfig, type FilterOperator, type GridAgentErrorCode, type GridAgentResult, type GridAgentStep, type GridAgentTool, type GridColumn, type GridIntent, type GridIntentContext, type GridLocale, type GridTheme, type GridTool, type GridToolColumn, type GridToolContext, type GridToolErrorCode, type GridToolFilter, type GridToolFilterOperator, type GridToolId, type GridToolLocale, type GridToolResult, type GridToolSort, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type UseGridOptions, type UseGridReturn, type ViewMode, type VoiceFeatures, type WebMCPState, type WebMCPStatus, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, YuktaiGridAI, type YuktaiGridAIProps, useYuktaiGridAgent as YuktaiGridAgent, type YuktaiGridAgentProps, type YuktaiGridProps, YuktaiGridWebMCP, type YuktaiGridWebMCPProps, aiPlugin, applyGridFilters, clearFilters, clearSort, countGrid, createGridTools, YuktAIWrapper as default, filterGrid, getColumns, getRow, getRowId, highlightRows, openRow, parseGridIntent, searchGrid, selectRow, sortGrid, toGridToolColumns, useGrid, useYuktaiGridAgent, voicePlugin, wcagPlugin as wcag, wcagPlugin };
