@@ -108,6 +108,31 @@ export interface GridTranslations {
   ask: string
 }
 
+export interface YuktaiGridRuleContext<T = Record<string, unknown>> {
+  input: string
+  data: T[]
+  columns: {
+    key: string
+    label: string
+  }[]
+}
+
+export interface YuktaiGridRule<T = Record<string, unknown>> {
+  /** Application-defined rule name. */
+  name: string
+
+  /** Phrases that activate this rule. */
+  phrases: string[]
+
+  /** Optional description for documentation/debugging. */
+  description?: string
+
+  /** Application-specific execution logic. */
+  execute: (
+    context: YuktaiGridRuleContext<T>
+  ) => Promise<string> | string
+}
+
 export interface YuktaiGridProps<
   T = Record<string, unknown>
 > {
@@ -193,6 +218,9 @@ export interface YuktaiGridProps<
     registered: string[]
     errors: { tool: string; message: string }[]
   }) => void
+
+  /** Application-defined content rules executed before generic Grid intent parsing. */
+  customRules?: YuktaiGridRule<T>[]
 
   /** Every result from the Agent (assistant or WebMCP), e.g. for logging. */
   onAgentResult?: (result: {

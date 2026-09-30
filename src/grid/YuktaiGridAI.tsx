@@ -1138,24 +1138,11 @@ export function YuktaiGridAI<
 
         setInput("");
 
-        const intent = parseIntent(
-          value,
-          language
-        );
-
         let response = "";
 
-        if (intent.type === "question") {
-          // Analysis questions (count / highest / average / total) are
-          // answered from the data here — no tool needed.
-          response = answerQuestion(
-            intent.payload ?? value,
-            data,
-            columns,
-            language
-          );
-        } else if (agent) {
-          // Actions go through the Agent: same pipeline as WebMCP.
+        // When an Agent is supplied, ALL user input goes through the Agent.
+        // This lets application-defined customRules run before generic Grid intents.
+        if (agent) {
           setThinking(true);
           try {
             const result = await agent.ask(value);
@@ -1165,7 +1152,21 @@ export function YuktaiGridAI<
           } finally {
             setThinking(false);
           }
-        } else if (intent.type === "search") {
+        } else {
+          // Legacy standalone YuktaiGridAI behaviour when no Agent is supplied.
+          const intent = parseIntent(
+            value,
+            language
+          );
+
+          if (intent.type === "question") {
+            response = answerQuestion(
+              intent.payload ?? value,
+              data,
+              columns,
+              language
+            );
+          } else if (intent.type === "search") {
           // 4.6.x behaviour (no agent)
           const query = String(
             intent.payload ?? value
@@ -1217,6 +1218,7 @@ export function YuktaiGridAI<
             response = t.noColumn;
           }
         }
+        }
 
         if (!response) {
           response = t.fallback;
@@ -1262,16 +1264,14 @@ export function YuktaiGridAI<
   const suggestions =
     language === "te-IN"
       ? [
-          "అత్యధిక విలువ",
           "ఎన్ని వరుసలు",
-          "సగటు విలువ",
           "శోధించండి",
+          "క్రమం",
         ]
       : [
-          "highest value",
           "how many rows",
-          "average value",
           "search",
+          "sort",
         ];
 
   const panel = (

@@ -289,6 +289,7 @@ export function YuktaiGrid<
   webmcp = false,
   onWebMCPStatusChange,
   onAgentResult,
+  customRules = [],
 }: YuktaiGridProps<T>) {
   const language: Language =
     locale === "te-IN" ? "te-IN" : "en-US";
@@ -697,11 +698,13 @@ export function YuktaiGrid<
     ]
   );
 
-  const agent = useYuktaiGridAgent({
+  const agent = useYuktaiGridAgent<T>({
     tools,
+    data,
     locale: toolLocale,
     columns: toolColumns,
     rowKey: String(rowKey),
+    customRules,
     onResult: onAgentResult,
   });
 

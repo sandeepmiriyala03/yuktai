@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRowId, type GridToolErrorCode, type GridToolLocale, type GridToolResult } from "./gridTools";
+import type { YuktaiGridRule, YuktaiGridRuleContext } from "./types";
 
 /* ================= TYPES ================= */
 
@@ -68,8 +69,10 @@ export type GridIntentContext = {
   locale: GridToolLocale;
 };
 
-export type YuktaiGridAgentProps = {
+export type YuktaiGridAgentProps<T = Record<string, unknown>> = {
   tools: GridAgentTool[];
+  /** Current grid data available to application-defined rules. */
+  data?: T[];
   onResult?: (result: GridAgentResult) => void;
   onError?: (error: Error) => void;
   /** Language of the agent's own messages (default "en"). */
@@ -80,6 +83,8 @@ export type YuktaiGridAgentProps = {
   rowKey?: string;
   /** Replace the built-in regex intent parser (e.g. with an on-device LLM). */
   parseIntent?: (text: string, context: GridIntentContext) => GridIntent | null;
+  /** Application-defined content rules executed before the generic intent parser. */
+  customRules?: YuktaiGridRule<T>[];
   /** How many steps to keep in history (default 20). */
   historyLimit?: number;
 };
@@ -192,18 +197,41 @@ function findTool(tools: GridAgentTool[], name: string): GridAgentTool | undefin
   return matches[0];
 }
 
+function normalizeRuleText(value: string): string {
+  return value.normalize("NFC").trim().toLocaleLowerCase();
+}
+
+function findCustomRule<T>(
+  input: string,
+  rules: YuktaiGridRule<T>[]
+): YuktaiGridRule<T> | undefined {
+  const normalizedInput = normalizeRuleText(input);
+
+  return rules.find((rule) =>
+    rule.phrases.some((phrase) => {
+      const normalizedPhrase = normalizeRuleText(phrase);
+      return (
+        normalizedPhrase.length > 0 &&
+        normalizedInput.includes(normalizedPhrase)
+      );
+    })
+  );
+}
+
 /* ================= HOOK ================= */
 
-export function useYuktaiGridAgent({
+export function useYuktaiGridAgent<T = Record<string, unknown>>({
   tools,
+  data = [],
   onResult,
   onError,
   locale = "en",
   columns = [],
   rowKey = "id",
   parseIntent,
+  customRules = [],
   historyLimit = 20,
-}: YuktaiGridAgentProps) {
+}: YuktaiGridAgentProps<T>) {
   const m = MESSAGES[locale];
 
   const [pending, setPending] = useState(0);
@@ -213,8 +241,8 @@ export function useYuktaiGridAgent({
 
   // Latest values in refs, so executeTool/ask keep a stable identity even
   // when the parent passes new arrays/callbacks on every render.
-  const latest = useRef({ tools, onResult, onError, columns, rowKey, parseIntent, historyLimit, m, locale });
-  latest.current = { tools, onResult, onError, columns, rowKey, parseIntent, historyLimit, m, locale };
+  const latest = useRef({ tools, data, onResult, onError, columns, rowKey, parseIntent, customRules, historyLimit, m, locale });
+  latest.current = { tools, data, onResult, onError, columns, rowKey, parseIntent, customRules, historyLimit, m, locale };
 
   const mounted = useRef(true);
   const stepId = useRef(0);
@@ -298,7 +326,66 @@ export function useYuktaiGridAgent({
   /** Understand a plain-language request and run the matching tool(s). */
   const ask = useCallback(
     async (text: string): Promise<GridAgentResult> => {
-      const { columns: cols, locale: loc, parseIntent: custom, m: msg, rowKey: key } = latest.current;
+      const {
+        columns: cols,
+        locale: loc,
+        parseIntent: custom,
+        customRules: rules,
+        data: rowsData,
+        m: msg,
+        rowKey: key,
+      } = latest.current;
+
+      // Application-defined rules always get first chance to handle the request.
+      const matchedRule = findCustomRule(text, rules ?? []);
+
+      if (matchedRule) {
+        const ruleContext: YuktaiGridRuleContext<T> = {
+          input: text,
+          data: rowsData,
+          columns: cols,
+        };
+
+        try {
+          const message = await matchedRule.execute(ruleContext);
+          const result: GridAgentResult = {
+            success: true,
+            message,
+            tool: `rule:${matchedRule.name}`,
+          };
+
+          record(
+            `rule:${matchedRule.name}`,
+            { text },
+            result,
+            "ask",
+            ++stepId.current
+          );
+          latest.current.onResult?.(result);
+          return result;
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          const result: GridAgentResult = {
+            success: false,
+            message: msg.failed,
+            error: { code: "INTERNAL" },
+            tool: `rule:${matchedRule.name}`,
+          };
+
+          if (mounted.current) setLastError(err);
+          latest.current.onError?.(err);
+          record(
+            `rule:${matchedRule.name}`,
+            { text },
+            result,
+            "ask",
+            ++stepId.current
+          );
+          return result;
+        }
+      }
+
+      // No application rule matched — continue with the generic Grid Agent.
       const context: GridIntentContext = { columns: cols, locale: loc };
       const intent = (custom ?? parseGridIntent)(text, context);
 
