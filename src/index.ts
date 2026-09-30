@@ -127,13 +127,16 @@ export type {
   ViewMode,
   GridTheme,
   GridLocale,
+  IndicLanguageLocale,
+  GridInputLanguage,
   AIFeatures,
   VoiceFeatures,
   PaginationConfig,
   GridTranslations,
   YuktaiGridProps,
+  YuktaiGridRule,
+  YuktaiGridRuleContext,
 } from "./grid/types";
-
 // ─── Icons ───────────────────────────────────────────────────────────────────
 export {
   IconBase,

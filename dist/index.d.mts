@@ -136,7 +136,9 @@ interface FilterConfig {
 }
 type ViewMode = "table" | "card" | "auto";
 type GridTheme = "default" | "high-contrast" | "dark" | "color-blind" | "dyslexia";
-type GridLocale = "en-IN" | "en-US" | "te-IN" | "hi-IN" | "ta-IN" | "bn-IN" | "mr-IN" | "kn-IN" | "ml-IN" | "gu-IN" | "pa-IN" | "ur-IN";
+type IndicLanguageLocale = "as-IN" | "bn-IN" | "brx-IN" | "doi-IN" | "gu-IN" | "hi-IN" | "kn-IN" | "ks-IN" | "kok-IN" | "mai-IN" | "ml-IN" | "mni-IN" | "mr-IN" | "ne-IN" | "or-IN" | "pa-IN" | "sa-IN" | "sat-IN" | "sd-IN" | "ta-IN" | "te-IN" | "ur-IN";
+type GridLocale = "en-IN" | "en-US" | IndicLanguageLocale;
+type GridInputLanguage = GridLocale;
 interface AIFeatures {
     search?: boolean;
     summary?: boolean;
@@ -171,21 +173,62 @@ interface GridTranslations {
     ask: string;
 }
 interface YuktaiGridRuleContext<T = Record<string, unknown>> {
+    /**
+     * Original user input.
+     */
     input: string;
+    /**
+     * Current grid data.
+     */
     data: T[];
+    /**
+     * Available grid columns.
+     */
     columns: {
         key: string;
         label: string;
     }[];
+    /**
+     * Execute one of the generic Grid tools.
+     *
+     * Example:
+     *
+     * executeTool("count")
+     *
+     * executeTool("filter", {
+     *   key: "lines",
+     *   operator: "greaterThan",
+     *   value: 6
+     * })
+     */
+    executeTool: (name: string, input?: Record<string, unknown>) => Promise<{
+        success: boolean;
+        message: string;
+        data?: unknown;
+        error?: {
+            code: string;
+        };
+        tool?: string;
+    }>;
 }
 interface YuktaiGridRule<T = Record<string, unknown>> {
-    /** Application-defined rule name. */
+    /**
+     * Application-defined rule name.
+     */
     name: string;
-    /** Phrases that activate this rule. */
+    /**
+     * User phrases that activate this rule.
+     */
     phrases: string[];
-    /** Optional description for documentation/debugging. */
+    /**
+     * Optional description for documentation/debugging.
+     */
     description?: string;
-    /** Application-specific execution logic. */
+    /**
+     * Application-specific execution logic.
+     *
+     * The package does NOT contain application-specific rules.
+     */
     execute: (context: YuktaiGridRuleContext<T>) => Promise<string> | string;
 }
 interface YuktaiGridProps<T = Record<string, unknown>> {
@@ -211,18 +254,37 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
     onRowClick?: (row: T, index: number) => void;
     onSortChange?: (sort: SortConfig | null) => void;
     className?: string;
-    /** Voice input language of the embedded assistant (default: follows `locale`). */
-    inputLanguage?: "en-US" | "te-IN";
-    /** Prefix for tool names, e.g. "ratnalabala_poems" → "ratnalabala_poems_search". */
+    /**
+     * Voice/input language of the embedded assistant.
+     *
+     * Supports English and the 22 Indian Scheduled Languages.
+     */
+    inputLanguage?: "en-IN" | "en-US" | IndicLanguageLocale;
+    /**
+     * Prefix for WebMCP / Agent tool names.
+     *
+     * Example:
+     *
+     * "ratnalabala_poems"
+     *
+     * produces:
+     *
+     * ratnalabala_poems_search
+     * ratnalabala_poems_filter
+     * ratnalabala_poems_sort
+     */
     toolName?: string;
-    /** Agent-facing tool descriptions, e.g. { search: "Search Telugu poems by title or text." } */
+    /**
+     * Agent-facing tool descriptions.
+     */
     toolDescriptions?: Partial<Record<"search" | "count" | "columns" | "get_row" | "highlight" | "select" | "open" | "filter" | "clear_filters" | "sort" | "clear_sort", string>>;
     /**
-     * Expose the grid's tools to AI agents via WebMCP (document.modelContext).
-     * Uses exactly the same tools as the embedded assistant.
+     * Expose Grid tools to AI agents through WebMCP.
      */
     webmcp?: boolean;
-    /** Real WebMCP registration status (state, registered tools, errors). */
+    /**
+     * Real WebMCP registration status.
+     */
     onWebMCPStatusChange?: (status: {
         state: "unsupported" | "registering" | "ready" | "partial" | "error";
         registered: string[];
@@ -231,9 +293,31 @@ interface YuktaiGridProps<T = Record<string, unknown>> {
             message: string;
         }[];
     }) => void;
-    /** Application-defined content rules executed before generic Grid intent parsing. */
+    /**
+     * Application-specific Agent rules.
+     *
+     * Example:
+     *
+     * customRules={[
+     *   {
+     *     name: "show-long-poems",
+     *     phrases: ["పెద్ద పద్యాలు"],
+     *     execute: async ({ executeTool }) => {
+     *       const result = await executeTool("filter", {
+     *         key: "lines",
+     *         operator: "greaterThan",
+     *         value: 6,
+     *       })
+     *
+     *       return result.message
+     *     },
+     *   },
+     * ]}
+     */
     customRules?: YuktaiGridRule<T>[];
-    /** Every result from the Agent (assistant or WebMCP), e.g. for logging. */
+    /**
+     * Every result from the Agent.
+     */
     onAgentResult?: (result: {
         success: boolean;
         message: string;
@@ -395,7 +479,8 @@ interface UseGridReturn<T> {
 }
 declare function useGrid<T extends Record<string, unknown>>(options: UseGridOptions<T>): UseGridReturn<T>;
 
-type Language = "en-US" | "te-IN";
+type UILanguage = "en-US" | "te-IN";
+type InputLanguage = GridInputLanguage;
 interface YuktaiGridAIProps<T> {
     data: T[];
     columns: {
@@ -403,10 +488,6 @@ interface YuktaiGridAIProps<T> {
         label: string;
         type?: "number" | "text" | "date";
     }[];
-    /**
-     * Used only when no `agent` is given (4.6.x behaviour).
-     * With an agent, every action goes through agent.ask() instead.
-     */
     onSearch?: (query: string) => void;
     onSort?: (key: string, dir: "asc" | "desc") => void;
     theme?: "light" | "dark";
@@ -414,22 +495,19 @@ interface YuktaiGridAIProps<T> {
      * Language of AI UI and AI responses.
      * Default: English.
      */
-    language?: Language;
+    language?: UILanguage;
     /**
      * Language used by browser voice recognition.
      * Default: English.
      */
-    inputLanguage?: Language;
+    inputLanguage?: InputLanguage;
     /**
      * When true, AI is rendered inside the grid.
      * When false, AI uses the floating assistant UI.
      */
     embedded?: boolean;
     /**
-     * The grid Agent (from useYuktaiGridAgent). When given, search / sort /
-     * filter / open / clear requests are sent to agent.ask() — the same
-     * pipeline WebMCP uses — and the Agent's result message is shown.
-     * Questions like "highest / average / total" are still answered here.
+     * The grid Agent.
      */
     agent?: {
         ask: (text: string) => Promise<{
@@ -438,8 +516,10 @@ interface YuktaiGridAIProps<T> {
         }>;
         loading?: boolean;
     };
-    /** Called when the person switches the voice input language. */
-    onInputLanguageChange?: (language: Language) => void;
+    /**
+     * Called when the person switches the voice input language.
+     */
+    onInputLanguageChange?: (language: InputLanguage) => void;
 }
 declare function YuktaiGridAI<T extends Record<string, unknown>>({ data, columns, onSearch, onSort, theme, language, inputLanguage, embedded, agent, onInputLanguageChange, }: YuktaiGridAIProps<T>): react_jsx_runtime.JSX.Element;
 
@@ -526,7 +606,9 @@ type GridIntent = {
     tool: string;
     input: Record<string, unknown>;
 }
-/** "open <something>": search for it, then open the first match */
+/**
+ * "open <something>": search for it, then open the first match
+ */
  | {
     kind: "open";
     text: string;
@@ -553,7 +635,7 @@ type YuktaiGridAgentProps<T = Record<string, unknown>> = {
     }[];
     /** Row ID field — must match the grid's rowKey (default "id"). */
     rowKey?: string;
-    /** Replace the built-in regex intent parser (e.g. with an on-device LLM). */
+    /** Replace the built-in regex intent parser. */
     parseIntent?: (text: string, context: GridIntentContext) => GridIntent | null;
     /** Application-defined content rules executed before the generic intent parser. */
     customRules?: YuktaiGridRule<T>[];
@@ -562,7 +644,7 @@ type YuktaiGridAgentProps<T = Record<string, unknown>> = {
 };
 /** Built-in parser: exported so it can be tested and reused. */
 declare function parseGridIntent(text: string, context: GridIntentContext): GridIntent | null;
-declare function useYuktaiGridAgent<T = Record<string, unknown>>({ tools, data, onResult, onError, locale, columns, rowKey, parseIntent, customRules, historyLimit, }: YuktaiGridAgentProps<T>): {
+declare function useYuktaiGridAgent<T = Record<string, unknown>>({ tools, data, onResult, onError, locale, columns, rowKey, parseIntent: customParseIntent, customRules, historyLimit, }: YuktaiGridAgentProps<T>): {
     loading: boolean;
     tools: GridAgentTool[];
     executeTool: (name: string, input?: Record<string, unknown>) => Promise<GridAgentResult<unknown>>;
@@ -638,4 +720,4 @@ declare const YuktAI: {
     scan(): A11yReport;
 };
 
-export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type CreateGridToolsOptions, type FilterConfig, type FilterOperator, type GridAgentErrorCode, type GridAgentResult, type GridAgentStep, type GridAgentTool, type GridColumn, type GridIntent, type GridIntentContext, type GridLocale, type GridTheme, type GridTool, type GridToolColumn, type GridToolContext, type GridToolErrorCode, type GridToolFilter, type GridToolFilterOperator, type GridToolId, type GridToolLocale, type GridToolResult, type GridToolSort, type GridTranslations, IconBase, type IconProps, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type UseGridOptions, type UseGridReturn, type ViewMode, type VoiceFeatures, type WebMCPState, type WebMCPStatus, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, YuktaiGridAI, type YuktaiGridAIProps, useYuktaiGridAgent as YuktaiGridAgent, type YuktaiGridAgentProps, type YuktaiGridProps, YuktaiGridWebMCP, type YuktaiGridWebMCPProps, aiPlugin, applyGridFilters, clearFilters, clearSort, countGrid, createGridTools, YuktAIWrapper as default, filterGrid, getColumns, getRow, getRowId, highlightRows, openRow, parseGridIntent, searchGrid, selectRow, sortGrid, toGridToolColumns, useGrid, useYuktaiGridAgent, voicePlugin, wcagPlugin as wcag, wcagPlugin };
+export { type A11yConfig, type A11yFix, type A11yReport, type AIFeatures, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, type ColorBlindMode, type CreateGridToolsOptions, type FilterConfig, type FilterOperator, type GridAgentErrorCode, type GridAgentResult, type GridAgentStep, type GridAgentTool, type GridColumn, type GridInputLanguage, type GridIntent, type GridIntentContext, type GridLocale, type GridTheme, type GridTool, type GridToolColumn, type GridToolContext, type GridToolErrorCode, type GridToolFilter, type GridToolFilterOperator, type GridToolId, type GridToolLocale, type GridToolResult, type GridToolSort, type GridTranslations, IconBase, type IconProps, type IndicLanguageLocale, type PaginationConfig, Runtime, SearchIcon, type Severity, type SortConfig, type SortDirection, SortDownIcon, SortUpIcon, type UseGridOptions, type UseGridReturn, type ViewMode, type VoiceFeatures, type WebMCPState, type WebMCPStatus, YuktAI, YuktAIWrapper, type YuktAIWrapperProps, YuktaiGrid, YuktaiGridAI, type YuktaiGridAIProps, useYuktaiGridAgent as YuktaiGridAgent, type YuktaiGridAgentProps, type YuktaiGridProps, type YuktaiGridRule, type YuktaiGridRuleContext, YuktaiGridWebMCP, type YuktaiGridWebMCPProps, aiPlugin, applyGridFilters, clearFilters, clearSort, countGrid, createGridTools, YuktAIWrapper as default, filterGrid, getColumns, getRow, getRowId, highlightRows, openRow, parseGridIntent, searchGrid, selectRow, sortGrid, toGridToolColumns, useGrid, useYuktaiGridAgent, voicePlugin, wcagPlugin as wcag, wcagPlugin };

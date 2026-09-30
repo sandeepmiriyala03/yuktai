@@ -8,7 +8,10 @@ import React, {
   useState,
 } from "react";
 
-type Language = "en-US" | "te-IN";
+import type { GridInputLanguage } from "./types";
+
+type UILanguage = "en-US" | "te-IN";
+type InputLanguage = GridInputLanguage;
 
 interface ChatMessage {
   role: "user" | "ai";
@@ -23,28 +26,27 @@ export interface YuktaiGridAIProps<T> {
     label: string;
     type?: "number" | "text" | "date";
   }[];
-  /**
-   * Used only when no `agent` is given (4.6.x behaviour).
-   * With an agent, every action goes through agent.ask() instead.
-   */
+
   onSearch?: (query: string) => void;
+
   onSort?: (
     key: string,
     dir: "asc" | "desc"
   ) => void;
+
   theme?: "light" | "dark";
 
   /**
    * Language of AI UI and AI responses.
    * Default: English.
    */
-  language?: Language;
+  language?: UILanguage;
 
   /**
    * Language used by browser voice recognition.
    * Default: English.
    */
-  inputLanguage?: Language;
+  inputLanguage?: InputLanguage;
 
   /**
    * When true, AI is rendered inside the grid.
@@ -53,22 +55,28 @@ export interface YuktaiGridAIProps<T> {
   embedded?: boolean;
 
   /**
-   * The grid Agent (from useYuktaiGridAgent). When given, search / sort /
-   * filter / open / clear requests are sent to agent.ask() — the same
-   * pipeline WebMCP uses — and the Agent's result message is shown.
-   * Questions like "highest / average / total" are still answered here.
+   * The grid Agent.
    */
   agent?: {
-    ask: (text: string) => Promise<{ success: boolean; message: string }>;
+    ask: (
+      text: string
+    ) => Promise<{
+      success: boolean;
+      message: string;
+    }>;
     loading?: boolean;
   };
 
-  /** Called when the person switches the voice input language. */
-  onInputLanguageChange?: (language: Language) => void;
+  /**
+   * Called when the person switches the voice input language.
+   */
+  onInputLanguageChange?: (
+    language: InputLanguage
+  ) => void;
 }
 
 const translations: Record<
-  Language,
+  UILanguage,
   {
     title: string;
     subtitle: string;
@@ -89,20 +97,24 @@ const translations: Record<
     sortedDescending: (column: string) => string;
 
     count: (value: number) => string;
+
     highest: (
       column: string,
       value: string,
       name: string
     ) => string;
+
     lowest: (
       column: string,
       value: string,
       name: string
     ) => string;
+
     average: (
       column: string,
       value: string
     ) => string;
+
     total: (
       column: string,
       value: string
@@ -249,7 +261,7 @@ function normalize(text: string): string {
 
 function parseIntent(
   text: string,
-  language: Language
+  language: UILanguage
 ): {
   type:
     | "search"
@@ -423,7 +435,7 @@ function findReferencedColumn<T>(
 
 function formatNumber(
   value: number,
-  language: Language
+  language: UILanguage
 ): string {
   return value.toLocaleString(
     language === "te-IN"
@@ -438,7 +450,7 @@ function answerQuestion<
   question: string,
   data: T[],
   columns: YuktaiGridAIProps<T>["columns"],
-  language: Language
+  language: UILanguage
 ): string {
   const t = translations[language];
 
@@ -766,7 +778,7 @@ function answerQuestion<
 
 function speak(
   text: string,
-  language: Language
+  language: UILanguage
 ) {
   if (
     typeof window === "undefined" ||
@@ -792,7 +804,7 @@ function speak(
 }
 
 function useSpeechRecognition(
-  language: Language
+  language: InputLanguage
 ) {
   const [listening, setListening] =
     useState(false);
@@ -1005,10 +1017,10 @@ export function YuktaiGridAI<
 }: YuktaiGridAIProps<T>) {
   const t = translations[language];
 
-  // Voice input language is now switchable (it used to be a disabled select).
-  // The prop sets the starting value and can still change it from outside.
   const [voiceLanguage, setVoiceLanguage] =
-    useState<Language>(inputLanguage);
+    useState<InputLanguage>(
+      inputLanguage
+    );
 
   useEffect(() => {
     setVoiceLanguage(inputLanguage);
@@ -1016,6 +1028,7 @@ export function YuktaiGridAI<
 
   const [thinking, setThinking] =
     useState(false);
+
   const dark = theme === "dark";
 
   const [chatOpen, setChatOpen] =
@@ -1140,12 +1153,13 @@ export function YuktaiGridAI<
 
         let response = "";
 
-        // When an Agent is supplied, ALL user input goes through the Agent.
-        // This lets application-defined customRules run before generic Grid intents.
         if (agent) {
           setThinking(true);
+
           try {
-            const result = await agent.ask(value);
+            const result =
+              await agent.ask(value);
+
             response = result.message;
           } catch {
             response = t.fallback;
@@ -1153,71 +1167,87 @@ export function YuktaiGridAI<
             setThinking(false);
           }
         } else {
-          // Legacy standalone YuktaiGridAI behaviour when no Agent is supplied.
           const intent = parseIntent(
             value,
             language
           );
 
           if (intent.type === "question") {
-            response = answerQuestion(
-              intent.payload ?? value,
-              data,
-              columns,
-              language
+            response =
+              answerQuestion(
+                intent.payload ?? value,
+                data,
+                columns,
+                language
+              );
+          } else if (
+            intent.type === "search"
+          ) {
+            const query = String(
+              intent.payload ?? value
             );
-          } else if (intent.type === "search") {
-          // 4.6.x behaviour (no agent)
-          const query = String(
-            intent.payload ?? value
-          );
 
-          onSearch?.(query);
-
-          response = t.searchStarted(
-            query
-          );
-        } else if (intent.type === "sort") {
-          const requestedKey =
-            intent.payload?.key;
-
-          let column =
-            requestedKey
-              ? columns.find(
-                  (item) =>
-                    normalize(item.key) ===
-                      normalize(requestedKey) ||
-                    normalize(item.label) ===
-                      normalize(requestedKey)
-                )
-              : undefined;
-
-          if (!column) {
-            column = findReferencedColumn(
-              value,
-              columns
-            );
-          }
-
-          if (column && onSort) {
-            const direction =
-              intent.payload?.dir === "desc"
-                ? "desc"
-                : "asc";
-
-            onSort(
-              String(column.key),
-              direction
-            );
+            onSearch?.(query);
 
             response =
-              direction === "asc"
-                ? t.sortedAscending(column.label)
-                : t.sortedDescending(column.label);
-          } else {
-            response = t.noColumn;
+              t.searchStarted(query);
+          } else if (
+            intent.type === "sort"
+          ) {
+            const requestedKey =
+              intent.payload?.key;
+
+            let column =
+              requestedKey
+                ? columns.find(
+                    (item) =>
+                      normalize(
+                        item.key
+                      ) ===
+                        normalize(
+                          requestedKey
+                        ) ||
+                      normalize(
+                        item.label
+                      ) ===
+                        normalize(
+                          requestedKey
+                        )
+                  )
+                : undefined;
+
+            if (!column) {
+              column =
+                findReferencedColumn(
+                  value,
+                  columns
+                );
+            }
+
+            if (column && onSort) {
+              const direction =
+                intent.payload?.dir ===
+                "desc"
+                  ? "desc"
+                  : "asc";
+
+              onSort(
+                String(column.key),
+                direction
+              );
+
+              response =
+                direction === "asc"
+                  ? t.sortedAscending(
+                      column.label
+                    )
+                  : t.sortedDescending(
+                      column.label
+                    );
+            } else {
+              response = t.noColumn;
+            }
           }
-        }
         }
 
         if (!response) {
@@ -1233,7 +1263,10 @@ export function YuktaiGridAI<
           },
         ]);
 
-        speak(response, language);
+        speak(
+          response,
+          language
+        );
       },
       [
         agent,
@@ -1251,7 +1284,9 @@ export function YuktaiGridAI<
       return;
     }
 
-    void handleUserInput(transcript);
+    void handleUserInput(
+      transcript
+    );
   }, [
     transcript,
     handleUserInput,
@@ -1300,7 +1335,6 @@ export function YuktaiGridAI<
         overflow: "hidden",
       }}
     >
-      {/* Header */}
       <div
         style={{
           padding: "12px 14px",
@@ -1379,7 +1413,6 @@ export function YuktaiGridAI<
         )}
       </div>
 
-      {/* Input language */}
       <div
         style={{
           padding: "8px 10px",
@@ -1403,9 +1436,14 @@ export function YuktaiGridAI<
           value={voiceLanguage}
           onChange={(event) => {
             const next =
-              event.target.value as Language;
+              event.target
+                .value as InputLanguage;
+
             setVoiceLanguage(next);
-            onInputLanguageChange?.(next);
+
+            onInputLanguageChange?.(
+              next
+            );
           }}
           disabled={listening}
           aria-label={t.inputLanguage}
@@ -1419,15 +1457,103 @@ export function YuktaiGridAI<
           }}
         >
           <option value="en-US">
-            {t.english}
+            English (US)
           </option>
+
+          <option value="en-IN">
+            English (India)
+          </option>
+
+          <option value="as-IN">
+            Assamese
+          </option>
+
+          <option value="bn-IN">
+            Bengali
+          </option>
+
+          <option value="brx-IN">
+            Bodo
+          </option>
+
+          <option value="doi-IN">
+            Dogri
+          </option>
+
+          <option value="gu-IN">
+            Gujarati
+          </option>
+
+          <option value="hi-IN">
+            Hindi
+          </option>
+
+          <option value="kn-IN">
+            Kannada
+          </option>
+
+          <option value="ks-IN">
+            Kashmiri
+          </option>
+
+          <option value="kok-IN">
+            Konkani
+          </option>
+
+          <option value="mai-IN">
+            Maithili
+          </option>
+
+          <option value="ml-IN">
+            Malayalam
+          </option>
+
+          <option value="mni-IN">
+            Manipuri
+          </option>
+
+          <option value="mr-IN">
+            Marathi
+          </option>
+
+          <option value="ne-IN">
+            Nepali
+          </option>
+
+          <option value="or-IN">
+            Odia
+          </option>
+
+          <option value="pa-IN">
+            Punjabi
+          </option>
+
+          <option value="sa-IN">
+            Sanskrit
+          </option>
+
+          <option value="sat-IN">
+            Santali
+          </option>
+
+          <option value="sd-IN">
+            Sindhi
+          </option>
+
+          <option value="ta-IN">
+            Tamil
+          </option>
+
           <option value="te-IN">
-            {t.telugu}
+            Telugu
+          </option>
+
+          <option value="ur-IN">
+            Urdu
           </option>
         </select>
       </div>
 
-      {/* Messages */}
       <div
         style={{
           flex: 1,
@@ -1488,14 +1614,12 @@ export function YuktaiGridAI<
               padding:
                 "8px 11px",
               borderRadius: 11,
-              background:
-                dark
-                  ? "#3F1D2E"
-                  : "#FEE2E2",
-              color:
-                dark
-                  ? "#FCA5A5"
-                  : "#991B1B",
+              background: dark
+                ? "#3F1D2E"
+                : "#FEE2E2",
+              color: dark
+                ? "#FCA5A5"
+                : "#991B1B",
               fontSize: 13,
             }}
           >
@@ -1503,16 +1627,21 @@ export function YuktaiGridAI<
           </div>
         )}
 
-        {(thinking || agent?.loading) && (
+        {(thinking ||
+          agent?.loading) && (
           <div
             role="status"
             aria-live="polite"
             style={{
-              alignSelf: "flex-start",
-              padding: "8px 11px",
+              alignSelf:
+                "flex-start",
+              padding:
+                "8px 11px",
               borderRadius: 11,
-              background: colors.aiMsg,
-              color: colors.muted,
+              background:
+                colors.aiMsg,
+              color:
+                colors.muted,
               fontSize: 13,
             }}
           >
@@ -1525,7 +1654,6 @@ export function YuktaiGridAI<
         />
       </div>
 
-      {/* Suggestions */}
       <div
         style={{
           padding:
@@ -1554,7 +1682,8 @@ export function YuktaiGridAI<
                 border: `1px solid ${colors.border}`,
                 background:
                   colors.surface,
-                color: colors.text,
+                color:
+                  colors.text,
                 fontSize: 10.5,
                 cursor:
                   "pointer",
@@ -1568,7 +1697,6 @@ export function YuktaiGridAI<
         )}
       </div>
 
-      {/* Composer */}
       <div
         style={{
           padding: 9,
@@ -1720,10 +1848,6 @@ export function YuktaiGridAI<
     </div>
   );
 
-  /*
-   * Embedded mode:
-   * AI stays inside YuktaiGrid.
-   */
   if (embedded) {
     return (
       <div
@@ -1748,14 +1872,12 @@ export function YuktaiGridAI<
               borderRadius: 9,
               border:
                 "1px solid #10B981",
-              background:
-                dark
-                  ? "#064E3B"
-                  : "#ECFDF5",
-              color:
-                dark
-                  ? "#A7F3D0"
-                  : "#047857",
+              background: dark
+                ? "#064E3B"
+                : "#ECFDF5",
+              color: dark
+                ? "#A7F3D0"
+                : "#047857",
               display:
                 "inline-flex",
               alignItems:
@@ -1767,9 +1889,7 @@ export function YuktaiGridAI<
               fontWeight: 600,
             }}
           >
-            <span
-              aria-hidden="true"
-            >
+            <span aria-hidden="true">
               AI
             </span>
 
@@ -1780,10 +1900,6 @@ export function YuktaiGridAI<
     );
   }
 
-  /*
-   * Floating mode:
-   * Preserved for standalone YuktaiGridAI usage.
-   */
   return (
     <>
       {!chatOpen && (
@@ -1845,6 +1961,7 @@ export function YuktaiGridAI<
           0%, 100% {
             transform: scale(1);
           }
+
           50% {
             transform: scale(1.05);
           }
